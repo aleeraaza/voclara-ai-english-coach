@@ -8,11 +8,16 @@ pub mod error;
 pub mod openapi;
 pub mod prompts;
 pub mod providers;
+pub mod relay;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
 
-use axum::{Router, http::HeaderName, routing::get};
+use axum::{
+    Router,
+    http::{HeaderName, Request},
+    routing::get,
+};
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
@@ -33,7 +38,13 @@ pub fn app(state: AppState) -> Router {
         .nest("/api/v1", routes::v1())
         // Layers run bottom-up on the request: set id -> trace -> propagate id.
         .layer(PropagateRequestIdLayer::new(REQUEST_ID))
-        .layer(TraceLayer::new_for_http())
+        // Spans log the path only, never the query string: relay tickets
+        // (and any future tokens in URLs) must not end up in logs.
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
+                tracing::info_span!("http", method = %req.method(), path = %req.uri().path())
+            }),
+        )
         .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
         .with_state(state)
 }

@@ -27,7 +27,8 @@ pub struct Rotated {
     pub refresh_token: String,
 }
 
-fn new_raw_token() -> String {
+/// A random 256-bit token, base64url. Used for refresh tokens and relay tickets.
+pub fn new_raw_token() -> String {
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)

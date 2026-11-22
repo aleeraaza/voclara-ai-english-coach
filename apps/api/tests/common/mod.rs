@@ -25,8 +25,12 @@ use voclara_api::{
     providers::{
         google::{GoogleIdentity, GoogleVerifier},
         otp::OtpSender,
-        voice::{RelayTarget, SessionConfig, Transport, VoiceProvider, VoiceProviders, VoiceToken},
+        voice::{
+            RelayCodec, RelayTarget, SessionConfig, Transport, VoiceProvider, VoiceProviders,
+            VoiceToken, fake::PassthroughCodec,
+        },
     },
+    relay::RelayLimits,
     state::Providers,
 };
 
@@ -54,6 +58,8 @@ pub struct TestVoice {
     pub name: &'static str,
     pub fail: std::sync::atomic::AtomicBool,
     pub last: Mutex<Option<(SessionConfig, u32)>>,
+    /// Where relay mode connects upstream; a closed port until a test sets it.
+    pub relay_url: Mutex<String>,
 }
 
 impl TestVoice {
@@ -62,7 +68,12 @@ impl TestVoice {
             name,
             fail: false.into(),
             last: Mutex::new(None),
+            relay_url: Mutex::new("ws://127.0.0.1:1/closed".into()),
         })
+    }
+
+    pub fn set_relay_url(&self, url: &str) {
+        *self.relay_url.lock().unwrap() = url.into();
     }
 
     pub fn set_failing(&self, fail: bool) {
@@ -118,9 +129,13 @@ impl VoiceProvider for TestVoice {
 
     fn relay_target(&self) -> AppResult<RelayTarget> {
         Ok(RelayTarget {
-            url: "ws://test".into(),
-            headers: vec![],
+            url: self.relay_url.lock().unwrap().clone(),
+            headers: vec![("x-test-key".into(), "secret-upstream-key".into())],
         })
+    }
+
+    fn relay_codec(&self) -> Box<dyn RelayCodec> {
+        Box::new(PassthroughCodec)
     }
 }
 
@@ -184,6 +199,15 @@ pub fn build(db: PgPool) -> TestApp {
 
 /// `with_fallback` adds a second test provider named "backup".
 pub fn build_with(db: PgPool, with_fallback: bool) -> TestApp {
+    build_full(db, with_fallback, RelayLimits::default())
+}
+
+/// Like `build`, with custom relay timeouts (tests shorten the idle timeout).
+pub fn build_relay(db: PgPool, limits: RelayLimits) -> TestApp {
+    build_full(db, false, limits)
+}
+
+fn build_full(db: PgPool, with_fallback: bool, limits: RelayLimits) -> TestApp {
     let otp = Arc::new(FakeOtp::default());
     let voice = TestVoice::new("primary");
     let fallback = with_fallback.then(|| TestVoice::new("backup"));
@@ -201,6 +225,10 @@ pub fn build_with(db: PgPool, with_fallback: bool) -> TestApp {
         },
     )
     .unwrap();
+    let state = AppState {
+        relay_limits: Arc::new(limits),
+        ..state
+    };
     TestApp {
         router: voclara_api::app(state),
         otp,
@@ -208,6 +236,25 @@ pub fn build_with(db: PgPool, with_fallback: bool) -> TestApp {
         fallback,
         db,
     }
+}
+
+impl TestApp {
+    /// Serve the app on a real local port (WebSockets cannot go through
+    /// `oneshot`). Returns `127.0.0.1:<port>`.
+    pub async fn serve(&self) -> std::net::SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = self.router.clone();
+        tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        addr
+    }
+}
+
+/// An access token for `user_id`, signed like the API's own.
+pub fn access_token_for(user_id: uuid::Uuid) -> String {
+    voclara_api::auth::JwtKeys::new(TEST_SECRET.as_bytes(), 900)
+        .issue_access(user_id)
+        .unwrap()
 }
 
 /// App whose pool points at a closed port: fine for routes that skip the DB.

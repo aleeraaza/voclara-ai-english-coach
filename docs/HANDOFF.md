@@ -20,22 +20,24 @@ and Cursor loads them through `.cursor/rules/voclara.mdc`.
 | Prompt 3 | `VoiceProvider` trait (Gemini, OpenAI, fake), `POST /sessions`, `/complete` | ✅ Done, committed `fd70f47` |
 | Prompt 4 | Expo Android app + live audio | 🟡 Code done and tested; **native build not yet verified; not committed** |
 | Prompt 4b | Next.js web layer | ⬜ Not started |
-| Prompt 5 | Relay mode WebSocket (optional) | ⬜ Not started (`relay_target()` already exists on each provider) |
+| Prompt 5 | Relay mode WebSocket | ✅ Done (API side; the mobile app still uses direct mode) |
 | Prompt 6 | Grading pipeline (grader LLM + Azure pronunciation) | ⬜ Not started |
 | Prompt 7 | IELTS mock flow (Parts 1-3, result page, share card) | ⬜ Not started (examiner prompt exists) |
 | Prompt 8 | Billing (Play Billing, Safepay, Paddle/Lemon Squeezy) | ⬜ Not started (tables exist) |
 | Week 7 | Streaks, push, placement test | ⬜ Not started (tables exist) |
 | Week 9 | Store listing, privacy policy, launch | ⬜ Not started |
 
-**Tests:** API 78 passing (`cargo test` against Postgres), mobile 44 passing
-(`npm test`). Clippy, `tsc`, `expo lint` and `expo-doctor` are all clean.
+**Tests:** API 100 passing (`cargo test` against Postgres), mobile 44 passing
+(`npm test`). Clippy, `tsc`, `expo lint` and `expo-doctor` are all clean. The
+relay load test ran 200 concurrent sessions × 10 round trips in 1.4 s
+(`RELAY_LOAD_SESSIONS=200 cargo test --test relay many_concurrent`; default 50).
 
 ### Not verified yet (do these first)
-1. **Android native build.** The first `gradlew assembleDebug` downloaded SDK
-   Platform 37 and Build-Tools 36/37, then ran out of memory compiling Kotlin
-   (see "Android build memory" in section 2). It was retried with lean settings;
-   if that has not produced `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`,
-   re-run it as section 2 shows and fix anything that fails.
+1. **Android native build.** It has not succeeded yet. Kotlin and Java now
+   compile with lean memory settings; the remaining blocker is Windows'
+   260-character path limit in react-native-audio-api's C++ build. Fix it with
+   option A (EAS cloud build) or B (long paths) in section 2. None of the
+   failures so far were errors in our code.
 2. **A real Gemini call.** The Gemini and OpenAI request shapes were written
    from the official docs and tested against a local mock, not the real services.
 3. **Audio on a device:** mic capture, playback, echo cancellation in
@@ -57,6 +59,31 @@ and Cursor loads them through `.cursor/rules/voclara.mdc`.
 | Android | SDK at `%LOCALAPPDATA%\Android\Sdk`, JDK 17, emulator AVD `Pixel_4_API_35`. |
 | Android build | Needs **Git Bash before WSL bash** on PATH: `$env:Path = "C:\Program Files\Git\bin;$env:Path"`. |
 | Android build memory | The first build failed with *"Could not reserve enough space in CodeHeap"*: the PC (16 GB) ran out of memory with the emulator, Docker, Gradle and Kotlin running together. Build with the emulator closed and lean flags: `.\gradlew.bat assembleDebug --no-parallel --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:ReservedCodeCacheSize=256m" "-Pkotlin.compiler.execution.strategy=in-process"`. To make this permanent, put the same settings in `%USERPROFILE%\.gradle\gradle.properties`. |
+| Android build path length | **Blocks local Android builds right now.** After the memory fix, the build failed with `ninja: error: mkdir(...): No such file or directory`. react-native-audio-api's C++ object folder is **269 characters**, over Windows' 260 limit, and `LongPathsEnabled` is 0 on this PC. What does not work: `subst` to a short drive (Expo autolinking resolves the real `E:\...` path, and at a drive root it cannot find `package.json` at all), or moving the repo to `C:\v` (saves only ~12 characters). See "Fixing the Android build" below. |
+
+### Fixing the Android build (pick one)
+
+**A. EAS cloud build (recommended; it is also what the guide plans for releases).**
+It builds on Linux, so there is no path limit and it does not use this PC's RAM.
+```powershell
+cd apps/mobile
+npx eas-cli@latest login                     # your Expo account
+npx eas-cli@latest build:configure           # creates eas.json
+npx eas-cli@latest build --profile development --platform android
+```
+Install the APK it produces on the emulator or phone, then run `npx expo start --dev-client`.
+
+**B. Local build with Windows long paths.**
+1. As administrator, enable long paths (this is a system setting):
+   `New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force`, then reboot.
+2. The ninja bundled with SDK CMake 3.22.1 may still fail on long paths. If it
+   does, install a newer CMake in Android Studio's SDK Manager (SDK Tools ->
+   CMake, 3.31+) so Gradle picks the newer ninja.
+3. Delete the stale cache:
+   `rd /s /q "\\?\E:\voclara\apps\mobile\node_modules\react-native-audio-api\android\.cxx"`.
+4. With the emulator closed, build lean and emulator-only:
+   `cd apps/mobile/android; .\gradlew.bat assembleDebug --no-parallel --max-workers=2 "-PreactNativeArchitectures=x86_64" "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:ReservedCodeCacheSize=256m" "-Pkotlin.compiler.execution.strategy=in-process"`.
+   Then start the emulator and `npx expo run:android`.
 
 ---
 
@@ -122,7 +149,36 @@ packages/api-types/  openapi.json (exported) + schema.d.ts (generated)
 | POST | `/api/v1/auth/logout` | revokes the device's token family |
 | GET/PATCH | `/api/v1/me` | profile, plan, balance, free drill secs today, streak; settings |
 | POST | `/api/v1/sessions` | `{mode: talk\|mock\|interview, topic}` -> ephemeral voice token |
-| POST | `/api/v1/sessions/{id}/complete` | typed transcript; charges time; logs cost |
+| POST | `/api/v1/sessions/{id}/complete` | typed transcript; charges time; logs cost (direct mode only; 409 for relay sessions) |
+| GET | `/api/v1/sessions/{id}/ws?ticket=` | relay WebSocket (start the session with `relay: true`) |
+
+### Relay mode (step 5)
+`POST /api/v1/sessions {mode, topic, relay: true}` returns `transport: "relay"`,
+`connect_url: /api/v1/sessions/{id}/ws` and a single-use `token` (the ticket,
+valid 60 s). The app opens a WebSocket there with `?ticket=<token>`; the server
+connects to the provider with **our** API key and sends **our** setup and
+system prompt. Code: `src/relay.rs` (the select loop), `RelayCodec` per
+provider in `src/providers/voice/{gemini,openai,fake}.rs`.
+
+- App -> server: `{"type":"audio","seq":1,"pcm16_b64":"..."}` (16 kHz PCM16),
+  `{"type":"end_turn"}`, `{"type":"stop"}`. Anything else ends the session
+  (`protocol_error`), so the app cannot inject a setup.
+- Server -> app: `ready`, `audio {seq, pcm16_b64, sample_rate}`,
+  `caption {role, text, final}`, `interrupted`, `turn_complete`,
+  `minutes {remaining_secs}` (every 10 s), `ended {reason}`.
+- End reasons: `client_stopped`, `client_disconnected`, `minutes_exhausted`
+  (hard cut-off at the limit), `idle` (60 s of silence from the app),
+  `upstream_closed`, `provider_unavailable` (nothing charged), `provider_error`,
+  `protocol_error`, `backpressure` (a peer blocked a send for 10 s).
+- No internal queues: each send is awaited in the loop, so memory per session
+  is bounded. App messages are capped at 256 KiB, audio chunks at 128 KiB.
+- When the sockets close, the server completes the session itself: it charges
+  the elapsed time (capped at the limit), stores the server-built transcript,
+  and logs measured audio seconds in and out to `session_costs`.
+- HTTP trace spans log the path only, never the query string (the ticket).
+- Not verified against the real Gemini or OpenAI WebSocket services yet
+  (tested with a fake upstream). The OpenAI codec resamples 16 -> 24 kHz and
+  relies on server-side voice activity detection.
 
 ### Rules the code enforces (keep them)
 - **Minutes:** integer seconds in an append-only `minute_ledger`. Every
@@ -172,9 +228,8 @@ Each prompt assumes Cursor has read `CLAUDE.md`. Finish each with the checks in
 section 3 and a commit.
 
 ### 6.0 Finish step 4
-1. Run the Android build and fix errors:
-   `cd apps/mobile/android; .\gradlew.bat assembleDebug`, then
-   `npx expo run:android`. Sign in on the emulator with the code from the API log.
+1. Get a dev build installed (section 2, option A or B), then sign in on the
+   emulator with the code from the API log.
 2. Set `VOICE_PROVIDER=gemini`, `GEMINI_API_KEY`, `GEMINI_LIVE_MODEL` in `.env`
    and hold a real 2-minute conversation. Check the captions, the transcript
    stored in `sessions.transcript`, and the charge.
@@ -226,13 +281,19 @@ section 3 and a commit.
 > 3 fixes, and a server-generated share card image with the Play Store link.
 > Mocks consume entitlements.mocks_left when the plan includes them."
 
-### 6.4 Prompt 5 — relay mode (optional; needed for a hard cut-off with OpenAI)
-> "Add GET /api/v1/sessions/{id}/ws: an axum WebSocket that opens the upstream
-> connection from VoiceProvider::relay_target() with tokio-tungstenite, forwards
-> frames both ways with tokio::select!, counts seconds, sends
-> {type:'minutes', remaining_secs} updates, closes both sides at the session's
-> max_secs, handles backpressure with bounded channels, and logs exact usage to
-> session_costs. Test with a fake upstream; load test 200 concurrent sessions."
+### 6.4 Relay mode in the app (optional)
+The API side is done (section 4). To use it from the app, for example as the
+path for the OpenAI fallback or for any provider when a hard server cut-off
+matters:
+> "In apps/mobile, add a relay transport to src/lib/live: when
+> POST /api/v1/sessions is called with relay: true, open a WebSocket to
+> API_URL + connect_url + '?ticket=' + token and speak the relay protocol in
+> docs/HANDOFF.md (send 16 kHz PCM16 audio chunks, end_turn on push-to-talk
+> release, stop on End; play `audio` at its sample_rate, show `caption`,
+> clear playback on `interrupted`, show `minutes`). Do not call
+> /sessions/{id}/complete for relay sessions; the server completes them.
+> Reuse LiveSession's mic/player and keep session.test.ts passing; add tests
+> with a fake socket."
 
 ### 6.5 Prompt 8 — billing
 > "Add billing. App: Google Play Billing subscriptions and minute packs
@@ -256,8 +317,11 @@ section 3 and a commit.
 ---
 
 ## 7. Known gaps and small debts
-- The mobile app has no Google sign-in button and no OpenAI WebRTC path
-  (`transport: webrtc` shows "not supported").
+- The mobile app has no Google sign-in button, no OpenAI WebRTC path
+  (`transport: webrtc` shows "not supported") and no relay client yet.
+- Relay sessions are tied to the instance that holds the socket. With several
+  API instances behind a load balancer, WebSocket upgrades need sticky routing
+  or a single relay instance.
 - The local M4A recording is made but not uploaded (step 6).
 - The feedback and progress screens show placeholders for bands.
 - Home and talk show "plans coming soon" at zero minutes (step 8).

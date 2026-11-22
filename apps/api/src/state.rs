@@ -7,6 +7,7 @@ use crate::{
     config::Config,
     prompts::Prompts,
     providers::{google::GoogleVerifier, otp::OtpSender, voice::VoiceProviders},
+    relay::RelayLimits,
 };
 
 /// External services the app talks to. Real ones in `main`, fakes in tests.
@@ -27,6 +28,8 @@ pub struct AppState {
     pub otp: Arc<dyn OtpSender>,
     pub google: Arc<dyn GoogleVerifier>,
     pub voice: Arc<VoiceProviders>,
+    /// Relay timeouts; tests shorten them.
+    pub relay_limits: Arc<RelayLimits>,
 }
 
 impl AppState {
@@ -43,6 +46,7 @@ impl AppState {
             otp: providers.otp,
             google: providers.google,
             voice: providers.voice,
+            relay_limits: Arc::new(RelayLimits::default()),
         })
     }
 }

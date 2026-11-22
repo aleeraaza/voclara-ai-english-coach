@@ -51,6 +51,10 @@ without keys. For real voice set `VOICE_PROVIDER=gemini`, `GEMINI_API_KEY` and
   (`hard_cutoff: false`): the app must end the call at `session_ends_at`.
 - `complete` charges the time the server saw, capped at the limit. A session
   never completed is charged its full limit once it is 2 minutes overdue.
+- Relay mode (`"relay": true` on session start): the app connects to
+  `GET /api/v1/sessions/{id}/ws?ticket=…` and the server talks to the provider,
+  cutting the session off at the limit for any provider. Protocol and end
+  reasons are in [docs/HANDOFF.md](docs/HANDOFF.md).
 
 Checks before every commit:
 
@@ -66,8 +70,9 @@ Following the product guide, one step at a time:
 2. ✅ Auth (phone OTP, Google, rotating refresh tokens), `/me`, minute wallet
 3. ✅ VoiceProvider trait (Gemini Live, OpenAI Realtime, fake), `POST /api/v1/sessions`,
    `POST /api/v1/sessions/{id}/complete`
-4. Android app and live audio; 4b web layer ← next
-5. Relay mode (optional)
-6. Grading pipeline
+4. 🟡 Android app and live audio (code done; native build blocked by Windows
+   path length, see docs/HANDOFF.md); 4b web layer
+5. ✅ Relay mode (API side)
+6. Grading pipeline ← next
 7. IELTS mock flow
 8. Billing

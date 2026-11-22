@@ -474,7 +474,7 @@
             }
           },
           "409": {
-            "description": "Session already ended",
+            "description": "Session already ended, or it is a relay session",
             "content": {
               "application/json": {
                 "schema": {
@@ -489,6 +489,64 @@
             "bearer": []
           }
         ]
+      }
+    },
+    "/api/v1/sessions/{id}/ws": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Relay mode: upgrade to a WebSocket and pump audio between the app and the\nprovider until the session's time is up. See `crate::relay` for the\nmessage protocol. Authenticated by the single-use ticket (browsers and some\nmobile WebSocket clients cannot send an Authorization header).",
+        "operationId": "relay_socket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Session id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "ticket",
+            "in": "query",
+            "description": "The single-use `token` from `POST /api/v1/sessions` with `relay: true`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switched to the relay WebSocket"
+          },
+          "401": {
+            "description": "Ticket missing, wrong, used or expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Voice provider unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {
@@ -798,6 +856,10 @@
             "type": "string",
             "description": "talk | mock | interview"
           },
+          "relay": {
+            "type": "boolean",
+            "description": "Route audio through the Voclara relay instead of straight to the\nprovider. Gives a server-enforced time limit for every provider."
+          },
           "topic": {
             "type": [
               "string",
@@ -826,7 +888,7 @@
         "properties": {
           "connect_url": {
             "type": "string",
-            "description": "Where the app connects. Gemini: WebSocket, append `?access_token=<token>`.\nOpenAI: POST the WebRTC SDP offer here with `Authorization: Bearer <token>`."
+            "description": "Where the app connects. Gemini: WebSocket, append `?access_token=<token>`.\nOpenAI: POST the WebRTC SDP offer here with `Authorization: Bearer <token>`.\nRelay: a path on this API; open a WebSocket to it with `?ticket=<token>`."
           },
           "hard_cutoff": {
             "type": "boolean",
@@ -860,7 +922,7 @@
           },
           "token": {
             "type": "string",
-            "description": "Ephemeral provider token. Never our API keys."
+            "description": "Ephemeral provider token, or the single-use relay ticket. Never our API keys."
           },
           "token_expires_at": {
             "type": "string",
@@ -953,7 +1015,8 @@
         "type": "string",
         "enum": [
           "websocket",
-          "webrtc"
+          "webrtc",
+          "relay"
         ]
       },
       "TurnRole": {

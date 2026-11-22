@@ -8,6 +8,7 @@
 pub mod fake;
 pub mod gemini;
 pub mod openai;
+pub mod pcm;
 
 use std::sync::Arc;
 
@@ -64,6 +65,54 @@ pub enum Transport {
     Websocket,
     /// POST an SDP offer to `connect_url` with the token as bearer (OpenAI).
     Webrtc,
+    /// Connect to our own relay WebSocket (`connect_url`, a path on this API)
+    /// with `?ticket=<token>`, and speak the Voclara relay protocol.
+    Relay,
+}
+
+/// What the relay learns from one upstream message, in provider-neutral form.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RelayEvent {
+    /// The provider accepted our setup; audio may flow.
+    Ready,
+    /// Tutor audio: base64 PCM16 mono.
+    Audio { pcm16_b64: String, sample_rate: u32 },
+    /// A caption fragment (or a whole utterance when `finished`).
+    Caption {
+        role: CaptionRole,
+        text: String,
+        finished: bool,
+    },
+    /// The learner spoke over the tutor: the app should stop playback.
+    Interrupted,
+    /// The tutor finished its turn.
+    TurnComplete,
+    /// The provider reported an error; the relay ends the session.
+    Error(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptionRole {
+    Learner,
+    Tutor,
+}
+
+/// Translates between the Voclara relay protocol and one provider's
+/// WebSocket protocol. One codec per session; it may keep state.
+///
+/// The client always sends 16 kHz PCM16 mono; a codec resamples if its
+/// provider wants another rate.
+pub trait RelayCodec: Send {
+    /// Messages to send upstream right after connecting: the session setup,
+    /// including our system prompt. The client never controls this.
+    fn open(&mut self, cfg: &SessionConfig) -> Vec<String>;
+    /// One chunk of learner audio (base64 PCM16 mono 16 kHz).
+    fn audio(&mut self, pcm16_b64_16k: &str) -> AppResult<Vec<String>>;
+    /// The learner released push-to-talk.
+    fn end_turn(&mut self) -> Vec<String>;
+    /// Translate one upstream text message.
+    fn decode(&mut self, upstream: &str) -> Vec<RelayEvent>;
 }
 
 /// A token the app uses to talk to the provider directly.
@@ -101,6 +150,8 @@ pub trait VoiceProvider: Send + Sync {
     ) -> AppResult<VoiceToken>;
     /// Upstream address and auth for relay mode.
     fn relay_target(&self) -> AppResult<RelayTarget>;
+    /// A fresh protocol translator for one relay session.
+    fn relay_codec(&self) -> Box<dyn RelayCodec>;
 }
 
 /// The primary provider plus an optional fallback, tried when the primary is

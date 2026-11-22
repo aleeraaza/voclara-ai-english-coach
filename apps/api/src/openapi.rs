@@ -21,6 +21,7 @@ use crate::{error, routes};
         routes::me::update_me,
         routes::sessions::start_session,
         routes::sessions::complete_session,
+        routes::sessions::relay_socket,
     ),
     components(schemas(
         routes::health::HealthResponse,

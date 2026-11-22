@@ -1,24 +1,28 @@
 //! Start and finish live speaking sessions.
 
+use std::time::Duration;
+
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State, ws::WebSocketUpgrade},
     http::StatusCode,
-    routing::post,
+    response::Response,
+    routing::{get, post},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    auth::AuthUser,
+    auth::{AuthUser, refresh},
     domain::{
-        sessions::{self, Mode, NewSession},
+        sessions::{self, EndedBy, Mode, NewSession},
         users,
     },
     error::{AppError, AppJson, AppResult, ErrorBody},
     providers::voice::{SessionConfig, Transport},
+    relay::{self, EndReason, RelayOutcome},
     state::AppState,
 };
 
@@ -26,6 +30,13 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/sessions", post(start_session))
         .route("/sessions/{id}/complete", post(complete_session))
+        .route("/sessions/{id}/ws", get(relay_socket))
+}
+
+#[derive(Deserialize, IntoParams)]
+pub struct RelayQuery {
+    /// The single-use `token` from `POST /api/v1/sessions` with `relay: true`.
+    pub ticket: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -35,6 +46,10 @@ pub struct StartSessionRequest {
     /// Free-text topic for talk/mock. For interview, the role:
     /// software | sales | banking | nursing | call_centre.
     pub topic: Option<String>,
+    /// Route audio through the Voclara relay instead of straight to the
+    /// provider. Gives a server-enforced time limit for every provider.
+    #[serde(default)]
+    pub relay: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -46,8 +61,9 @@ pub struct StartSessionResponse {
     pub transport: Transport,
     /// Where the app connects. Gemini: WebSocket, append `?access_token=<token>`.
     /// OpenAI: POST the WebRTC SDP offer here with `Authorization: Bearer <token>`.
+    /// Relay: a path on this API; open a WebSocket to it with `?ticket=<token>`.
     pub connect_url: String,
-    /// Ephemeral provider token. Never our API keys.
+    /// Ephemeral provider token, or the single-use relay ticket. Never our API keys.
     pub token: String,
     /// Connect before this or the token stops working.
     pub token_expires_at: DateTime<Utc>,
@@ -154,10 +170,46 @@ pub async fn start_session(
             provider: primary.name(),
             model: primary.model(),
             prompt_version: &prompt.version,
+            relay: req.relay,
         },
         state.config.voice.usd_per_min,
     )
     .await?;
+
+    if req.relay {
+        // No provider token: the app connects to us, and the relay connects to
+        // the provider with our key once the ticket is presented.
+        let ticket = refresh::new_raw_token();
+        sessions::set_relay_ticket(
+            &state.db,
+            reserved.id,
+            &refresh::hash_token(&ticket),
+            &system_prompt,
+        )
+        .await?;
+        tracing::info!(
+            session_id = %reserved.id, user_id = %user.id, mode = mode.as_str(),
+            provider = primary.name(), max_secs = reserved.max_secs, "relay session reserved"
+        );
+        let now = Utc::now();
+        return Ok((
+            StatusCode::CREATED,
+            Json(StartSessionResponse {
+                session_id: reserved.id,
+                mode: mode.as_str().into(),
+                provider: primary.name().into(),
+                model: primary.model().into(),
+                transport: Transport::Relay,
+                connect_url: format!("/api/v1/sessions/{}/ws", reserved.id),
+                token: ticket,
+                token_expires_at: now + chrono::Duration::seconds(sessions::RELAY_TICKET_SECS),
+                max_secs: reserved.max_secs,
+                session_ends_at: now + chrono::Duration::seconds(i64::from(reserved.max_secs)),
+                hard_cutoff: true,
+                prompt_version: prompt.version.clone(),
+            }),
+        ));
+    }
 
     let cfg = SessionConfig { system_prompt };
     // `max_secs` is positive (checked in `reserve`), so the conversion holds.
@@ -207,7 +259,7 @@ pub async fn start_session(
         (status = 200, description = "Session completed", body = CompleteSessionResponse),
         (status = 400, description = "Malformed or oversized transcript", body = ErrorBody),
         (status = 404, description = "No such session for this user", body = ErrorBody),
-        (status = 409, description = "Session already ended", body = ErrorBody)
+        (status = 409, description = "Session already ended, or it is a relay session", body = ErrorBody)
     )
 )]
 pub async fn complete_session(
@@ -232,6 +284,7 @@ pub async fn complete_session(
         id,
         transcript,
         state.config.voice.usd_per_min,
+        EndedBy::Client,
     )
     .await?;
     tracing::info!(session_id = %id, user_id = %user.id, seconds = done.seconds_charged, "session completed");
@@ -240,4 +293,86 @@ pub async fn complete_session(
         seconds_charged: done.seconds_charged,
         balance_secs: done.balance_secs,
     }))
+}
+
+/// Relay mode: upgrade to a WebSocket and pump audio between the app and the
+/// provider until the session's time is up. See `crate::relay` for the
+/// message protocol. Authenticated by the single-use ticket (browsers and some
+/// mobile WebSocket clients cannot send an Authorization header).
+#[utoipa::path(
+    get, path = "/api/v1/sessions/{id}/ws", tag = "sessions",
+    params(("id" = Uuid, Path, description = "Session id"), RelayQuery),
+    responses(
+        (status = 101, description = "Switched to the relay WebSocket"),
+        (status = 401, description = "Ticket missing, wrong, used or expired", body = ErrorBody),
+        (status = 503, description = "Voice provider unavailable", body = ErrorBody)
+    )
+)]
+pub async fn relay_socket(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<RelayQuery>,
+    ws: WebSocketUpgrade,
+) -> AppResult<Response> {
+    let ticket = query.ticket.ok_or(AppError::Unauthorized)?;
+    // Consumes the ticket: a second connect with it gets 401.
+    let opened = sessions::open_relay(&state.db, id, &refresh::hash_token(&ticket)).await?;
+
+    let provider = state.voice.primary();
+    if provider.name() != opened.provider {
+        // The provider config changed since the session was reserved.
+        sessions::mark_failed(&state.db, id).await?;
+        return Err(AppError::Unavailable);
+    }
+    let target = provider.relay_target()?;
+    let codec = provider.relay_codec();
+    let cfg = SessionConfig {
+        system_prompt: opened.system_prompt.unwrap_or_default(),
+    };
+    let deadline = tokio::time::Instant::now() + Duration::from_secs_f64(opened.remaining_secs);
+    let limits = state.relay_limits.as_ref().clone();
+    let user_id = opened.user_id;
+
+    tracing::info!(session_id = %id, %user_id, provider = provider.name(),
+        remaining_secs = opened.remaining_secs, "relay opened");
+    Ok(ws
+        .max_message_size(relay::MAX_CLIENT_MESSAGE)
+        .max_frame_size(relay::MAX_CLIENT_MESSAGE)
+        .on_upgrade(move |socket| async move {
+            let outcome = relay::run(socket, target, codec, cfg, deadline, limits).await;
+            finish_relay(&state, id, user_id, outcome).await;
+        }))
+}
+
+/// Charge and store a finished relay session. Runs after the sockets close,
+/// so errors can only be logged.
+async fn finish_relay(state: &AppState, id: Uuid, user_id: Uuid, outcome: RelayOutcome) {
+    if outcome.reason == EndReason::ProviderUnavailable {
+        tracing::warn!(session_id = %id, "relay could not reach the provider; nothing charged");
+        if let Err(e) = sessions::mark_failed(&state.db, id).await {
+            tracing::error!(session_id = %id, error = ?e, "marking relay session failed");
+        }
+        return;
+    }
+    let transcript = serde_json::to_value(&outcome.transcript).ok();
+    let ended_by = EndedBy::Relay {
+        input_secs: outcome.audio_in_secs.round() as i32,
+        output_secs: outcome.audio_out_secs.round() as i32,
+    };
+    match sessions::complete(
+        &state.db,
+        user_id,
+        id,
+        transcript,
+        state.config.voice.usd_per_min,
+        ended_by,
+    )
+    .await
+    {
+        Ok(done) => tracing::info!(
+            session_id = %id, %user_id, reason = outcome.reason.as_str(),
+            seconds = done.seconds_charged, "relay session completed"
+        ),
+        Err(e) => tracing::error!(session_id = %id, error = ?e, "completing relay session"),
+    }
 }

@@ -43,6 +43,10 @@ layer (landing, quiz funnel, checkout, account, SEO). One Rust API for both.
   apps/mobile `npm run gen:api`; CI fails if either file is stale.
 - Mobile checks: `npm run typecheck && npm test && npx expo lint` in apps/mobile.
 - Request bodies use `AppJson<T>` (not `axum::Json`) so bad JSON gets our error format.
+- Relay mode (src/relay.rs): the server always sends its own setup/prompt upstream;
+  never forward a client setup. No unbounded queues: await sends in the select loop.
+  Relay sessions are completed by the server, never by the app's /complete.
+- Never log URLs with query strings (relay tickets travel in `?ticket=`).
 
 ## Local dev
 - `docker compose up -d db` starts Postgres 16 on localhost:5433 (5432 is taken by other local Postgres).

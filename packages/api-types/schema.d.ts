@@ -144,6 +144,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/ws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Relay mode: upgrade to a WebSocket and pump audio between the app and the
+         *     provider until the session's time is up. See `crate::relay` for the
+         *     message protocol. Authenticated by the single-use ticket (browsers and some
+         *     mobile WebSocket clients cannot send an Authorization header).
+         */
+        get: operations["relay_socket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -273,6 +295,11 @@ export interface components {
             /** @description talk | mock | interview */
             mode: string;
             /**
+             * @description Route audio through the Voclara relay instead of straight to the
+             *     provider. Gives a server-enforced time limit for every provider.
+             */
+            relay?: boolean;
+            /**
              * @description Free-text topic for talk/mock. For interview, the role:
              *     software | sales | banking | nursing | call_centre.
              */
@@ -282,6 +309,7 @@ export interface components {
             /**
              * @description Where the app connects. Gemini: WebSocket, append `?access_token=<token>`.
              *     OpenAI: POST the WebRTC SDP offer here with `Authorization: Bearer <token>`.
+             *     Relay: a path on this API; open a WebSocket to it with `?ticket=<token>`.
              */
             connect_url: string;
             /** @description True if the provider itself cuts the session off at the limit. */
@@ -302,7 +330,7 @@ export interface components {
             session_ends_at: string;
             /** Format: uuid */
             session_id: string;
-            /** @description Ephemeral provider token. Never our API keys. */
+            /** @description Ephemeral provider token, or the single-use relay ticket. Never our API keys. */
             token: string;
             /**
              * Format: date-time
@@ -344,7 +372,7 @@ export interface components {
             text: string;
         };
         /** @enum {string} */
-        Transport: "websocket" | "webrtc";
+        Transport: "websocket" | "webrtc" | "relay";
         /** @enum {string} */
         TurnRole: "learner" | "tutor";
         UpdateMeRequest: {
@@ -738,8 +766,50 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Session already ended */
+            /** @description Session already ended, or it is a relay session */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    relay_socket: {
+        parameters: {
+            query?: {
+                /** @description The single-use `token` from `POST /api/v1/sessions` with `relay: true`. */
+                ticket?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Session id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switched to the relay WebSocket */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ticket missing, wrong, used or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Voice provider unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

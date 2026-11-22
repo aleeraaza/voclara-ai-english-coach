@@ -116,7 +116,12 @@ pub struct NewSession<'a> {
     pub provider: &'a str,
     pub model: &'a str,
     pub prompt_version: &'a str,
+    /// True: the app connects to our relay WebSocket instead of the provider.
+    pub relay: bool,
 }
+
+/// How long a relay ticket stays valid after the session is reserved.
+pub const RELAY_TICKET_SECS: i64 = 60;
 
 /// Charge this user's abandoned sessions, in a transaction of its own.
 ///
@@ -159,8 +164,8 @@ pub async fn reserve(db: &PgPool, new: NewSession<'_>, usd_per_min: f64) -> AppR
     let max_secs = i32::try_from(max_secs).map_err(|e| AppError::Internal(e.into()))?;
 
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO sessions (user_id, mode, topic, provider, model, prompt_version, max_secs)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+        "INSERT INTO sessions (user_id, mode, topic, provider, model, prompt_version, max_secs, transport)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
     )
     .bind(new.user_id)
     .bind(new.mode.as_str())
@@ -169,10 +174,68 @@ pub async fn reserve(db: &PgPool, new: NewSession<'_>, usd_per_min: f64) -> AppR
     .bind(new.model)
     .bind(new.prompt_version)
     .bind(max_secs)
+    .bind(if new.relay { "relay" } else { "direct" })
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
     Ok(Reserved { id, max_secs })
+}
+
+/// Store a relay session's single-use ticket (hashed) and its rendered prompt.
+pub async fn set_relay_ticket(
+    db: &PgPool,
+    id: Uuid,
+    ticket_hash: &[u8],
+    system_prompt: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE sessions
+         SET relay_ticket_hash = $2,
+             relay_ticket_expires_at = now() + make_interval(secs => $3),
+             relay_prompt = $4
+         WHERE id = $1 AND transport = 'relay'",
+    )
+    .bind(id)
+    .bind(ticket_hash)
+    .bind(RELAY_TICKET_SECS as f64)
+    .bind(system_prompt)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// What the relay needs once the app has connected.
+#[derive(sqlx::FromRow)]
+pub struct OpenedRelay {
+    pub user_id: Uuid,
+    pub provider: String,
+    pub system_prompt: Option<String>,
+    /// Seconds left before the session's hard limit (measured from start).
+    pub remaining_secs: f64,
+}
+
+/// Consume a relay ticket: valid, unexpired, for an active relay session.
+/// One statement, so two connects racing with the same ticket cannot both win.
+pub async fn open_relay(db: &PgPool, id: Uuid, ticket_hash: &[u8]) -> AppResult<OpenedRelay> {
+    sqlx::query_as(
+        "WITH s AS (
+            SELECT id, user_id, provider, relay_prompt, max_secs, started_at FROM sessions
+            WHERE id = $1 AND transport = 'relay' AND status = 'active'
+              AND relay_ticket_hash = $2 AND relay_ticket_expires_at > now()
+            FOR UPDATE
+         )
+         UPDATE sessions
+         SET relay_ticket_hash = NULL, relay_ticket_expires_at = NULL, relay_prompt = NULL
+         FROM s WHERE sessions.id = s.id
+         RETURNING s.user_id, s.provider, s.relay_prompt AS system_prompt,
+                   GREATEST(0, s.max_secs - EXTRACT(EPOCH FROM now() - s.started_at))::float8
+                       AS remaining_secs",
+    )
+    .bind(id)
+    .bind(ticket_hash)
+    .fetch_optional(db)
+    .await?
+    .ok_or(AppError::Unauthorized)
 }
 
 /// Record which provider actually served the session (the fallback may have).
@@ -206,9 +269,19 @@ pub struct Completed {
 #[derive(sqlx::FromRow)]
 struct ActiveRow {
     status: String,
+    transport: String,
     max_secs: i32,
     provider: String,
     elapsed_secs: f64,
+}
+
+/// Who is ending the session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndedBy {
+    /// `POST /sessions/{id}/complete` from the app (direct mode only).
+    Client,
+    /// The relay, when its sockets close. Carries the measured audio seconds.
+    Relay { input_secs: i32, output_secs: i32 },
 }
 
 /// End a session: store the transcript, charge the elapsed time (capped at the
@@ -219,12 +292,13 @@ pub async fn complete(
     session_id: Uuid,
     transcript: Option<serde_json::Value>,
     usd_per_min: f64,
+    ended_by: EndedBy,
 ) -> AppResult<Completed> {
     let mut tx = db.begin().await?;
     // Same lock order as `reserve` and `debit_seconds`: user first, then session.
     minutes::lock_user(&mut tx, user_id).await?;
     let row: ActiveRow = sqlx::query_as(
-        "SELECT status, max_secs, provider,
+        "SELECT status, transport, max_secs, provider,
                 EXTRACT(EPOCH FROM now() - started_at)::float8 AS elapsed_secs
          FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE",
     )
@@ -238,6 +312,13 @@ pub async fn complete(
             "session already {}",
             row.status
         )));
+    }
+    // A relay session ends when the relay closes. Letting the app "complete"
+    // it early would stop the meter while the relay keeps streaming.
+    if ended_by == EndedBy::Client && row.transport == "relay" {
+        return Err(AppError::Conflict(
+            "relay sessions end when the relay socket closes".into(),
+        ));
     }
 
     // `as` saturates for floats, and elapsed is clamped to [0, max_secs].
@@ -260,7 +341,25 @@ pub async fn complete(
     } else {
         minutes::balance(&mut *tx, user_id).await?
     };
-    record_cost(&mut tx, session_id, &row.provider, charged, usd_per_min).await?;
+    let usage = match ended_by {
+        EndedBy::Relay {
+            input_secs,
+            output_secs,
+        } => Usage::Measured {
+            input_secs,
+            output_secs,
+        },
+        EndedBy::Client => Usage::Estimated,
+    };
+    record_cost(
+        &mut tx,
+        session_id,
+        &row.provider,
+        charged,
+        usd_per_min,
+        usage,
+    )
+    .await?;
     tx.commit().await?;
 
     Ok(Completed {
@@ -305,28 +404,60 @@ async fn settle_abandoned(
         if charge > 0 {
             minutes::debit_locked(&mut *conn, user_id, id, charge).await?;
         }
-        record_cost(&mut *conn, id, &provider, charge, usd_per_min).await?;
+        record_cost(
+            &mut *conn,
+            id,
+            &provider,
+            charge,
+            usd_per_min,
+            Usage::Estimated,
+        )
+        .await?;
         tracing::info!(session_id = %id, %user_id, charge, "abandoned session charged in full");
     }
     Ok(())
 }
 
-/// Planning-number cost until real provider usage is read back (marked estimated).
+/// What we know about a session's audio for the cost log.
+#[derive(Debug, Clone, Copy)]
+enum Usage {
+    /// Direct mode: the audio never passed through us.
+    Estimated,
+    /// Relay mode: counted frame by frame.
+    Measured { input_secs: i32, output_secs: i32 },
+}
+
+/// USD is the planning number per live minute until real provider pricing is
+/// read back; the audio seconds are measured in relay mode.
 async fn record_cost(
     conn: &mut PgConnection,
     session_id: Uuid,
     provider: &str,
     secs: i32,
     usd_per_min: f64,
+    usage: Usage,
 ) -> AppResult<()> {
     let usd = f64::from(secs) / 60.0 * usd_per_min;
+    let (input_secs, output_secs, tokens) = match usage {
+        Usage::Estimated => (secs, 0, serde_json::json!({ "estimated": true })),
+        Usage::Measured {
+            input_secs,
+            output_secs,
+        } => (
+            input_secs,
+            output_secs,
+            serde_json::json!({ "estimated": true, "audio": "measured" }),
+        ),
+    };
     sqlx::query(
         "INSERT INTO session_costs (session_id, provider, input_secs, output_secs, tokens, usd)
-         VALUES ($1, $2, $3, 0, '{\"estimated\": true}', $4)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind(session_id)
     .bind(provider)
-    .bind(secs)
+    .bind(input_secs)
+    .bind(output_secs)
+    .bind(tokens)
     .bind(usd)
     .execute(conn)
     .await?;
