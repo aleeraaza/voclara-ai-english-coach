@@ -3,9 +3,9 @@ name: api
 on:
   push:
     branches: [main]
-    paths: ["apps/api/**", "Cargo.toml", "Cargo.lock", ".github/workflows/api.yml"]
+    paths: ["apps/api/**", "packages/prompts/**", "packages/api-types/**", "Cargo.toml", "Cargo.lock", ".github/workflows/api.yml"]
   pull_request:
-    paths: ["apps/api/**", "Cargo.toml", "Cargo.lock", ".github/workflows/api.yml"]
+    paths: ["apps/api/**", "packages/prompts/**", "packages/api-types/**", "Cargo.toml", "Cargo.lock", ".github/workflows/api.yml"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,3 +35,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      - name: openapi.json is up to date
+        run: |
+          cargo run -q -p voclara-api --bin export_openapi -- packages/api-types/openapi.json
+          git diff --exit-code -- packages/api-types/openapi.json

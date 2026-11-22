@@ -17,7 +17,7 @@ use crate::{
         sessions::{self, Mode, NewSession},
         users,
     },
-    error::{AppError, AppResult, ErrorBody},
+    error::{AppError, AppJson, AppResult, ErrorBody},
     providers::voice::{SessionConfig, Transport},
     state::AppState,
 };
@@ -60,11 +60,30 @@ pub struct StartSessionResponse {
     pub prompt_version: String,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum TurnRole {
+    Learner,
+    Tutor,
+}
+
+/// One caption turn. The grader reads only `learner` turns.
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct TranscriptTurn {
+    pub role: TurnRole,
+    pub text: String,
+    /// Milliseconds from session start.
+    pub t_ms: u64,
+}
+
+/// Upper bound on what one session can produce; stops oversized uploads.
+const MAX_TURNS: usize = 2_000;
+const MAX_TEXT_CHARS: usize = 100_000;
+
 #[derive(Deserialize, ToSchema)]
 pub struct CompleteSessionRequest {
-    /// Caption log from the session: `[{"role": "learner"|"tutor", "text": "...", "t_ms": 0}, ...]`.
-    #[schema(value_type = Option<Vec<Object>>)]
-    pub transcript: Option<serde_json::Value>,
+    /// Caption log from the session, in order.
+    pub transcript: Option<Vec<TranscriptTurn>>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -93,7 +112,7 @@ pub struct CompleteSessionResponse {
 pub async fn start_session(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(req): Json<StartSessionRequest>,
+    AppJson(req): AppJson<StartSessionRequest>,
 ) -> AppResult<(StatusCode, Json<StartSessionResponse>)> {
     let mode = Mode::parse(&req.mode)?;
     let topic = sessions::clean_topic(req.topic.as_deref())?;
@@ -186,7 +205,7 @@ pub async fn start_session(
     request_body = CompleteSessionRequest,
     responses(
         (status = 200, description = "Session completed", body = CompleteSessionResponse),
-        (status = 400, description = "Transcript is not a list", body = ErrorBody),
+        (status = 400, description = "Malformed or oversized transcript", body = ErrorBody),
         (status = 404, description = "No such session for this user", body = ErrorBody),
         (status = 409, description = "Session already ended", body = ErrorBody)
     )
@@ -195,18 +214,23 @@ pub async fn complete_session(
     State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
-    Json(req): Json<CompleteSessionRequest>,
+    AppJson(req): AppJson<CompleteSessionRequest>,
 ) -> AppResult<Json<CompleteSessionResponse>> {
-    if req.transcript.as_ref().is_some_and(|t| !t.is_array()) {
-        return Err(AppError::BadRequest(
-            "transcript must be a list of turns".into(),
-        ));
-    }
+    let transcript = match req.transcript {
+        Some(turns) => {
+            let chars: usize = turns.iter().map(|t| t.text.chars().count()).sum();
+            if turns.len() > MAX_TURNS || chars > MAX_TEXT_CHARS {
+                return Err(AppError::BadRequest("transcript is too large".into()));
+            }
+            Some(serde_json::to_value(turns).map_err(|e| AppError::Internal(e.into()))?)
+        }
+        None => None,
+    };
     let done = sessions::complete(
         &state.db,
         user.id,
         id,
-        req.transcript,
+        transcript,
         state.config.voice.usd_per_min,
     )
     .await?;

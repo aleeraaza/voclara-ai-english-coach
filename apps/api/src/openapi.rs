@@ -37,6 +37,8 @@ use crate::{error, routes};
         routes::sessions::StartSessionRequest,
         routes::sessions::StartSessionResponse,
         routes::sessions::CompleteSessionRequest,
+        routes::sessions::TranscriptTurn,
+        routes::sessions::TurnRole,
         routes::sessions::CompleteSessionResponse,
         crate::providers::voice::Transport,
         error::ErrorBody,

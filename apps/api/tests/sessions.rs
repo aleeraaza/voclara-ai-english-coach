@@ -237,6 +237,10 @@ async fn completing_twice_or_someone_elses_session_fails() {
 
     let (s, body) = complete(&app, &alice, id, json!({ "transcript": "not a list" })).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "{body}");
+    let bad_role = json!({ "transcript": [{ "role": "narrator", "text": "x", "t_ms": 0 }] });
+    let (s, body) = complete(&app, &alice, id, bad_role).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "bad_request");
 }
 
 #[tokio::test]

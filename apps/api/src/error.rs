@@ -3,11 +3,24 @@
 
 use axum::{
     Json,
+    extract::{FromRequest, rejection::JsonRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
 use utoipa::ToSchema;
+
+/// Drop-in for `axum::Json` as a request extractor: a malformed body becomes
+/// our usual `{"error": {...}}` 400 instead of axum's plain-text 422.
+#[derive(FromRequest)]
+#[from_request(via(Json), rejection(AppError))]
+pub struct AppJson<T>(pub T);
+
+impl From<JsonRejection> for AppError {
+    fn from(rejection: JsonRejection) -> Self {
+        Self::BadRequest(rejection.body_text())
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

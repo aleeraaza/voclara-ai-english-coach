@@ -1,0 +1,13 @@
+---
+description: Voclara project rules (API in Rust, Expo mobile app)
+alwaysApply: true
+---
+
+Before making changes, read these files and follow them:
+
+- `CLAUDE.md` (repo root): stack, rules (minutes, auth, prompts, logging), local setup and checks.
+- `docs/HANDOFF.md`: what is built, what is verified, and the next steps with prompts.
+- `apps/mobile/AGENTS.md`: Expo rules for anything in `apps/mobile` (use `npx expo install`, check versioned Expo docs, never edit generated `android/` or `ios/`).
+
+Finish every change with the checks listed in CLAUDE.md, and regenerate
+`packages/api-types` after any API change.

@@ -1,0 +1,1025 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Voclara API",
+    "description": "Control plane for the Voclara speaking coach",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth/google": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign in with a Google ID token.",
+        "operationId": "google",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid Google token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email belongs to another Google account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Google sign-in not configured or unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out this device: revokes its refresh token family.",
+        "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/otp/send": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Send a one-time sign-in code to a phone number.",
+        "operationId": "otp_send",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Code sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpSendResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid phone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many codes requested",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/otp/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Check a one-time code; signs in (or signs up) and returns tokens.",
+        "operationId": "otp_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Wrong or expired code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many wrong attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Exchange a refresh token for a new access + refresh token pair.",
+        "operationId": "refresh_tokens",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "New tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token invalid, expired or reused (sign in again)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Profile, plan, minutes and streak of the signed-in user.",
+        "operationId": "get_me",
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Update name, explanation language, level or goal. Omitted fields are unchanged.",
+        "operationId": "update_me",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Start a live session: checks minutes, builds the persona prompt and returns\nan ephemeral provider token limited to the user's remaining time.",
+        "operationId": "start_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Session started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid mode or topic",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another session is still running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Voice provider unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{id}/complete": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Finish a session: stores the transcript and charges the elapsed time.",
+        "operationId": "complete_session",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Session id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Session completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or oversized transcript",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session already ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness: the process is up. Never touches the database.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Process is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness: the API can reach Postgres.",
+        "operationId": "ready",
+        "responses": {
+          "200": {
+            "description": "Database reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CompleteSessionRequest": {
+        "type": "object",
+        "properties": {
+          "transcript": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TranscriptTurn"
+            },
+            "description": "Caption log from the session, in order."
+          }
+        }
+      },
+      "CompleteSessionResponse": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "seconds_charged",
+          "balance_secs"
+        ],
+        "properties": {
+          "balance_secs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "seconds_charged": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Seconds taken from the wallet (elapsed time, capped at the limit)."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Wire format of every error: `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code the app can switch on."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable message; never contains internal details."
+          }
+        }
+      },
+      "GoogleLoginRequest": {
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "description": "The ID token from Google Sign-In on the device or web."
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "\"ok\" for liveness, \"ready\" for readiness."
+          },
+          "version": {
+            "type": "string",
+            "description": "Crate version of the running API."
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "l1",
+          "timezone",
+          "plan",
+          "minutes",
+          "streak"
+        ],
+        "properties": {
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "goal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "l1": {
+            "type": "string",
+            "description": "Explanation language: ur | hi | bn | ar | en."
+          },
+          "level": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minutes": {
+            "$ref": "#/components/schemas/MinutesInfo"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan": {
+            "type": "string",
+            "description": "Active plan from entitlements, or \"free\"."
+          },
+          "streak": {
+            "$ref": "#/components/schemas/StreakInfo"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      },
+      "MinutesInfo": {
+        "type": "object",
+        "required": [
+          "balance_secs",
+          "daily_drill_secs_left"
+        ],
+        "properties": {
+          "balance_secs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Live conversation seconds left in the wallet."
+          },
+          "daily_drill_secs_left": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Free drill seconds left today."
+          }
+        }
+      },
+      "OtpSendRequest": {
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "International format, e.g. \"+923001234567\"."
+          }
+        }
+      },
+      "OtpSendResponse": {
+        "type": "object",
+        "required": [
+          "expires_in",
+          "resend_after"
+        ],
+        "properties": {
+          "expires_in": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds until the code expires."
+          },
+          "resend_after": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds before another code can be requested."
+          }
+        }
+      },
+      "OtpVerifyRequest": {
+        "type": "object",
+        "required": [
+          "phone",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        }
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "StartSessionRequest": {
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "talk | mock | interview"
+          },
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-text topic for talk/mock. For interview, the role:\nsoftware | sales | banking | nursing | call_centre."
+          }
+        }
+      },
+      "StartSessionResponse": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "mode",
+          "provider",
+          "model",
+          "transport",
+          "connect_url",
+          "token",
+          "token_expires_at",
+          "max_secs",
+          "session_ends_at",
+          "hard_cutoff",
+          "prompt_version"
+        ],
+        "properties": {
+          "connect_url": {
+            "type": "string",
+            "description": "Where the app connects. Gemini: WebSocket, append `?access_token=<token>`.\nOpenAI: POST the WebRTC SDP offer here with `Authorization: Bearer <token>`."
+          },
+          "hard_cutoff": {
+            "type": "boolean",
+            "description": "True if the provider itself cuts the session off at the limit."
+          },
+          "max_secs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Session length limit in seconds: min(minutes left, mode limit)."
+          },
+          "mode": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "prompt_version": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "session_ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The app must end the session by this time."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string",
+            "description": "Ephemeral provider token. Never our API keys."
+          },
+          "token_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Connect before this or the token stops working."
+          },
+          "transport": {
+            "$ref": "#/components/schemas/Transport"
+          }
+        }
+      },
+      "StreakInfo": {
+        "type": "object",
+        "required": [
+          "current_days",
+          "best_days"
+        ],
+        "properties": {
+          "best_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "current_days": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "refresh_token",
+          "user_id",
+          "new_user"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Access token lifetime in seconds."
+          },
+          "new_user": {
+            "type": "boolean",
+            "description": "True on the very first sign-in (show onboarding)."
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Single-use: each refresh returns a new one. Store it securely."
+          },
+          "token_type": {
+            "type": "string",
+            "description": "Always \"Bearer\"."
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TranscriptTurn": {
+        "type": "object",
+        "description": "One caption turn. The grader reads only `learner` turns.",
+        "required": [
+          "role",
+          "text",
+          "t_ms"
+        ],
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/TurnRole"
+          },
+          "t_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Milliseconds from session start.",
+            "minimum": 0
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "Transport": {
+        "type": "string",
+        "enum": [
+          "websocket",
+          "webrtc"
+        ]
+      },
+      "TurnRole": {
+        "type": "string",
+        "enum": [
+          "learner",
+          "tutor"
+        ]
+      },
+      "UpdateMeRequest": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ielts | interview | work | abroad | daily"
+          },
+          "l1": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ur | hi | bn | ar | en"
+          },
+          "level": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a1 | a2 | b1 | b2 | c1 | c2"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness and readiness"
+    },
+    {
+      "name": "auth",
+      "description": "Phone OTP, Google sign-in, token refresh"
+    },
+    {
+      "name": "me",
+      "description": "The signed-in user"
+    },
+    {
+      "name": "sessions",
+      "description": "Live speaking sessions"
+    }
+  ]
+}

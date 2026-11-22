@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     auth::AuthUser,
     domain::{minutes, sessions, users},
-    error::{AppResult, ErrorBody},
+    error::{AppJson, AppResult, ErrorBody},
     state::AppState,
 };
 
@@ -116,7 +116,7 @@ pub async fn get_me(State(state): State<AppState>, user: AuthUser) -> AppResult<
 pub async fn update_me(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(req): Json<UpdateMeRequest>,
+    AppJson(req): AppJson<UpdateMeRequest>,
 ) -> AppResult<Json<MeResponse>> {
     let mut settings = users::Settings {
         name: req.name,

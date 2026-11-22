@@ -7,7 +7,9 @@ layer (landing, quiz funnel, checkout, account, SEO). One Rust API for both.
 
 ## Layout
 - apps/api: Rust (axum) control plane — auth, sessions, minutes, grading jobs, billing
-- apps/mobile: Expo (React Native) — the product (not built yet)
+- apps/mobile: Expo SDK 58 (React Native 0.88) — the product. Routes in src/app,
+  logic in src/lib. Read apps/mobile/AGENTS.md: always `npx expo install`, check
+  versioned Expo docs, never edit the generated android/ ios/ folders.
 - apps/web: Next.js — landing, quiz funnel, checkout, account, SEO (not built yet)
 - packages/prompts: tutor personas and grader rubrics, versioned
 - packages/content: IELTS cue cards, interview banks, role-plays
@@ -37,11 +39,17 @@ layer (landing, quiz funnel, checkout, account, SEO). One Rust API for both.
 - Model names come from config/env, never hard-coded.
 - Say "IELTS-style practice"; never claim affiliation with IELTS.
 - Run `cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test` before finishing.
+- After any API change: `cargo run -p voclara-api --bin export_openapi`, then in
+  apps/mobile `npm run gen:api`; CI fails if either file is stale.
+- Mobile checks: `npm run typecheck && npm test && npx expo lint` in apps/mobile.
+- Request bodies use `AppJson<T>` (not `axum::Json`) so bad JSON gets our error format.
 
 ## Local dev
 - `docker compose up -d db` starts Postgres 16 on localhost:5433 (5432 is taken by other local Postgres).
 - Windows toolchain: Rust stable-x86_64-pc-windows-gnu with MSYS2 MinGW GCC (C:\msys64\mingw64\bin on PATH).
   The MSVC Build Tools installer hangs on this machine, so do not switch to the msvc toolchain.
+- Android native builds need Git Bash ahead of WSL's bash on PATH:
+  `$env:Path = "C:\Program Files\Git\bin;$env:Path"`. Emulator AVD: Pixel_4_API_35.
 - Copy `.env.example` to `.env`, then `cargo run -p voclara-api`.
 - Migrations live in apps/api/migrations and run on startup when RUN_MIGRATIONS=true.
 

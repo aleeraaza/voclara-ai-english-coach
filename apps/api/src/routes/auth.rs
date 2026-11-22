@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     auth::{otp, refresh},
     domain::users,
-    error::{AppError, AppResult, ErrorBody},
+    error::{AppError, AppJson, AppResult, ErrorBody},
     state::AppState,
 };
 
@@ -94,7 +94,7 @@ fn token_response(
 )]
 pub async fn otp_send(
     State(state): State<AppState>,
-    Json(req): Json<OtpSendRequest>,
+    AppJson(req): AppJson<OtpSendRequest>,
 ) -> AppResult<(StatusCode, Json<OtpSendResponse>)> {
     let phone = otp::normalize_phone(&req.phone)?;
 
@@ -153,7 +153,7 @@ pub async fn otp_send(
 )]
 pub async fn otp_verify(
     State(state): State<AppState>,
-    Json(req): Json<OtpVerifyRequest>,
+    AppJson(req): AppJson<OtpVerifyRequest>,
 ) -> AppResult<Json<TokenResponse>> {
     let phone = otp::normalize_phone(&req.phone)?;
     let mut tx = state.db.begin().await?;
@@ -217,7 +217,7 @@ pub async fn otp_verify(
 )]
 pub async fn google(
     State(state): State<AppState>,
-    Json(req): Json<GoogleLoginRequest>,
+    AppJson(req): AppJson<GoogleLoginRequest>,
 ) -> AppResult<Json<TokenResponse>> {
     let ident = state.google.verify(&req.id_token).await?;
     let mut tx = state.db.begin().await?;
@@ -247,7 +247,7 @@ pub async fn google(
 )]
 pub async fn refresh_tokens(
     State(state): State<AppState>,
-    Json(req): Json<RefreshRequest>,
+    AppJson(req): AppJson<RefreshRequest>,
 ) -> AppResult<Json<TokenResponse>> {
     let rotated =
         refresh::rotate(&state.db, &req.refresh_token, state.config.refresh_ttl_days).await?;
@@ -267,7 +267,7 @@ pub async fn refresh_tokens(
 )]
 pub async fn logout(
     State(state): State<AppState>,
-    Json(req): Json<RefreshRequest>,
+    AppJson(req): AppJson<RefreshRequest>,
 ) -> AppResult<StatusCode> {
     refresh::revoke_family(&state.db, &req.refresh_token).await?;
     Ok(StatusCode::NO_CONTENT)

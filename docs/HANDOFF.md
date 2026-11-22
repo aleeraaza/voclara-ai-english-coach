@@ -1,0 +1,267 @@
+# Voclara — development handoff
+
+_Last updated: 22 Nov 2026. Written for continuing work in Cursor._
+
+Voclara is an Urdu-first AI English speaking coach (IELTS-style mocks, job
+interviews, daily talk) for South Asian learners. The plan, market notes and
+the step-by-step prompts come from the product guide
+(`Voclara — AI English Speaking Coach Product Building Guide.md`, kept outside
+the repo). **Project rules for any AI assistant are in [`CLAUDE.md`](../CLAUDE.md)**,
+and Cursor loads them through `.cursor/rules/voclara.mdc`.
+
+---
+
+## 1. Where things stand
+
+| Guide step | What | Status |
+| --- | --- | --- |
+| Prompt 1 | Scaffold: Rust API, migrations, Docker, CI | ✅ Done, committed `ccfc48e` |
+| Prompt 2 | Phone OTP + Google sign-in, rotating refresh tokens, minute wallet | ✅ Done, committed `1a2cb96` |
+| Prompt 3 | `VoiceProvider` trait (Gemini, OpenAI, fake), `POST /sessions`, `/complete` | ✅ Done, committed `fd70f47` |
+| Prompt 4 | Expo Android app + live audio | 🟡 Code done and tested; **native build not yet verified; not committed** |
+| Prompt 4b | Next.js web layer | ⬜ Not started |
+| Prompt 5 | Relay mode WebSocket (optional) | ⬜ Not started (`relay_target()` already exists on each provider) |
+| Prompt 6 | Grading pipeline (grader LLM + Azure pronunciation) | ⬜ Not started |
+| Prompt 7 | IELTS mock flow (Parts 1-3, result page, share card) | ⬜ Not started (examiner prompt exists) |
+| Prompt 8 | Billing (Play Billing, Safepay, Paddle/Lemon Squeezy) | ⬜ Not started (tables exist) |
+| Week 7 | Streaks, push, placement test | ⬜ Not started (tables exist) |
+| Week 9 | Store listing, privacy policy, launch | ⬜ Not started |
+
+**Tests:** API 78 passing (`cargo test` against Postgres), mobile 44 passing
+(`npm test`). Clippy, `tsc`, `expo lint` and `expo-doctor` are all clean.
+
+### Not verified yet (do these first)
+1. **Android native build.** The first `gradlew assembleDebug` downloaded SDK
+   Platform 37 and Build-Tools 36/37, then ran out of memory compiling Kotlin
+   (see "Android build memory" in section 2). It was retried with lean settings;
+   if that has not produced `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`,
+   re-run it as section 2 shows and fix anything that fails.
+2. **A real Gemini call.** The Gemini and OpenAI request shapes were written
+   from the official docs and tested against a local mock, not the real services.
+3. **Audio on a device:** mic capture, playback, echo cancellation in
+   hands-free mode, and the session state machine with a real socket.
+4. **Gemini session resumption** with a constrained (ephemeral) token. The app
+   sends `setup.sessionResumption.handle` on reconnect, but the token locks the
+   setup. It is unclear whether Gemini honours the handle; check on a 10+ minute
+   mock.
+
+---
+
+## 2. Machine setup (this Windows PC)
+
+| Thing | State / why |
+| --- | --- |
+| Rust | 1.100, **`stable-x86_64-pc-windows-gnu`** with MSYS2 GCC (`C:\msys64\mingw64\bin` on user PATH). The Visual Studio Build Tools installer hangs on this machine (its .NET downloader stalls on one manifest), so do not switch to the MSVC toolchain. |
+| Postgres | Docker, `docker compose up -d db`, **port 5433** (5432 is used by another project's Postgres). |
+| Node | 22.14, npm 11. |
+| Android | SDK at `%LOCALAPPDATA%\Android\Sdk`, JDK 17, emulator AVD `Pixel_4_API_35`. |
+| Android build | Needs **Git Bash before WSL bash** on PATH: `$env:Path = "C:\Program Files\Git\bin;$env:Path"`. |
+| Android build memory | The first build failed with *"Could not reserve enough space in CodeHeap"*: the PC (16 GB) ran out of memory with the emulator, Docker, Gradle and Kotlin running together. Build with the emulator closed and lean flags: `.\gradlew.bat assembleDebug --no-parallel --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:ReservedCodeCacheSize=256m" "-Pkotlin.compiler.execution.strategy=in-process"`. To make this permanent, put the same settings in `%USERPROFILE%\.gradle\gradle.properties`. |
+
+---
+
+## 3. Commands
+
+```powershell
+# API (repo root)
+docker compose up -d db
+Copy-Item .env.example .env          # first time only
+cargo run -p voclara-api             # http://127.0.0.1:8080
+$env:DATABASE_URL="postgres://voclara:voclara@localhost:5433/voclara"; cargo test
+cargo fmt --all; cargo clippy --all-targets -- -D warnings
+
+# After changing the API: refresh the spec and TypeScript types (CI checks both)
+cargo run -p voclara-api --bin export_openapi
+cd apps/mobile; npm run gen:api
+
+# Mobile (apps/mobile)
+npm run typecheck; npm test; npx expo lint; npx expo-doctor
+$env:Path = "C:\Program Files\Git\bin;$env:Path"
+npx expo run:android                 # dev build on emulator/phone + Metro
+```
+
+For the emulator, run the API with `BIND_ADDR=0.0.0.0:8080`; the app's default
+URL is `http://10.0.2.2:8080` (set `EXPO_PUBLIC_API_URL` in
+`apps/mobile/.env.local` for a real phone). Sign-in codes are printed in the API
+log (`OTP_PROVIDER=log`).
+
+---
+
+## 4. What exists
+
+### Repository
+```
+apps/api/            Rust axum API (the control plane)
+  migrations/        0001 core tables, 0002 otp_codes
+  src/auth/          jwt.rs, refresh.rs (rotation + reuse detection), otp.rs, extractor.rs (AuthUser)
+  src/domain/        minutes.rs (wallet), sessions.rs (lifecycle), users.rs
+  src/providers/     otp.rs, google.rs, voice/{gemini,openai,fake}.rs
+  src/routes/        health, auth, me, sessions
+  src/bin/export_openapi.rs
+  tests/             http, auth, minutes, sessions, voice_providers, migrations
+apps/mobile/         Expo SDK 58 / RN 0.88 app (see apps/mobile/README.md)
+  src/app/           sign-in, index (home), talk, feedback, progress, settings
+  src/lib/api/       openapi-fetch client + single-flight TokenManager
+  src/lib/live/      gemini.ts (protocol), pcm.ts, transcript.ts, session.ts (state machine)
+  src/lib/audio/     mic.ts (16 kHz, AEC, M4A file), player.ts (24 kHz queue)
+packages/prompts/    tutor-v1, examiner-v1, interviewer-v1, grader-v1 (embedded into the API)
+packages/content/    ielts/cue-cards.json (2 sample cards)
+packages/api-types/  openapi.json (exported) + schema.d.ts (generated)
+.github/workflows/   api.yml, mobile.yml
+```
+
+### API endpoints (all JSON; errors are `{"error":{"code","message"}}`)
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/health`, `/ready` | liveness / DB readiness |
+| GET | `/openapi.json` | spec |
+| POST | `/api/v1/auth/otp/send` | 6-digit code, 5 min, 30 s resend gap, 5/hour |
+| POST | `/api/v1/auth/otp/verify` | sign in or sign up (+600 free seconds once) |
+| POST | `/api/v1/auth/google` | ID token verified against Google JWKS; needs `GOOGLE_CLIENT_IDS` |
+| POST | `/api/v1/auth/refresh` | rotates; reusing an old token revokes the family |
+| POST | `/api/v1/auth/logout` | revokes the device's token family |
+| GET/PATCH | `/api/v1/me` | profile, plan, balance, free drill secs today, streak; settings |
+| POST | `/api/v1/sessions` | `{mode: talk\|mock\|interview, topic}` -> ephemeral voice token |
+| POST | `/api/v1/sessions/{id}/complete` | typed transcript; charges time; logs cost |
+
+### Rules the code enforces (keep them)
+- **Minutes:** integer seconds in an append-only `minute_ledger`. Every
+  balance-then-write locks the user row first (`minutes::lock_user`), always in
+  the order user, then session. One usage row per session (unique index).
+- **Sessions:** one active session per user, with a limit of min(balance, mode
+  limit: talk 600 s, mock/interview 900 s). Completion charges the
+  *server-measured* elapsed time, capped at the limit. A session not completed
+  2 minutes after its limit is charged in full, in **its own transaction**
+  (`settle_abandoned_for`, also run on `GET /me`). A provider outage marks the
+  session `failed` and charges nothing.
+- **Voice:** Gemini tokens are single-use with the prompt locked in, and
+  `expireTime` is a hard cut-off (`hard_cutoff: true`). An OpenAI client secret
+  only limits session *start* (`hard_cutoff: false`); a real cut-off for OpenAI
+  needs relay mode. Model ids come only from env.
+- **Auth:** 15-minute HS256 access JWT; 30-day refresh tokens stored as SHA-256.
+  The app's `TokenManager` refreshes single-flight; parallel refreshes would
+  trigger reuse detection.
+- **Prompts:** embedded via `include_str!`; their `version` is stored on each
+  session. Never edit a published version; add `v2.md`.
+- **Request bodies** use `AppJson<T>`, so malformed JSON gets our error format.
+- Never log transcripts at info level; say "IELTS-style", never claim IELTS affiliation.
+
+### Database tables
+`users, refresh_tokens, otp_codes, sessions, session_costs, scores,
+pronunciation_results, minute_ledger (+ minute_balances view), entitlements,
+purchases, streaks, push_tokens, jobs` (a Postgres job queue designed for
+`FOR UPDATE SKIP LOCKED` workers, not used yet).
+
+---
+
+## 5. Decisions you still need to make
+| Decision | Needed for |
+| --- | --- |
+| WhatsApp/SMS OTP provider (implement `OtpSender`) | any real sign-in; production refuses `OTP_PROVIDER=log` |
+| Google OAuth client ids (Android + web) and a native sign-in library | Google sign-in button (API side is done) |
+| Current Gemini Live model id + API key; measured cost per minute | real sessions; replace `VOICE_USD_PER_MIN=0.03` |
+| Cloudflare R2 bucket and keys | audio upload (step 6) |
+| Grader LLM and Azure Speech region | step 6 |
+| Payment providers and accounts | step 8 |
+
+---
+
+## 6. Next steps, in order (prompts to paste into Cursor)
+
+Each prompt assumes Cursor has read `CLAUDE.md`. Finish each with the checks in
+section 3 and a commit.
+
+### 6.0 Finish step 4
+1. Run the Android build and fix errors:
+   `cd apps/mobile/android; .\gradlew.bat assembleDebug`, then
+   `npx expo run:android`. Sign in on the emulator with the code from the API log.
+2. Set `VOICE_PROVIDER=gemini`, `GEMINI_API_KEY`, `GEMINI_LIVE_MODEL` in `.env`
+   and hold a real 2-minute conversation. Check the captions, the transcript
+   stored in `sessions.transcript`, and the charge.
+3. Test on a low-end Android phone over 4G (guide requirement).
+4. Commit: "Add Expo Android app with live Gemini sessions".
+
+> **Prompt (if the live audio misbehaves):** "Read apps/mobile/src/lib/live/session.ts
+> and src/lib/audio/*. On a real device: [describe the symptom]. Check the
+> react-native-audio-api 1.x docs for AudioRecorder/AudioBufferQueueSourceNode and
+> fix it, keeping session.test.ts passing."
+
+### 6.1 Prompt 4b — web layer
+> "Create apps/web (Next.js App Router, TypeScript strict, Tailwind, shadcn/ui).
+> Pages: landing (English + Urdu), a 6-question 'check your speaking band' quiz
+> that records one 30-second answer in the browser and shows an estimated band
+> (stub the scoring behind an interface until grading exists), email/phone
+> capture, Play Store link, account page (plan, minutes from GET /api/v1/me),
+> and an IELTS cue-card SEO page template generated from packages/content/ielts.
+> Use the same API and bearer auth (phone OTP) via openapi-fetch and
+> packages/api-types. Add CORS to the API for the web origin (tower-http
+> CorsLayer, origins from config). Checkout comes in step 8; leave a placeholder."
+
+### 6.2 Prompt 6 — grading (the most valuable next backend step)
+> "Implement grading. (1) POST /api/v1/uploads/presign returns a presigned R2 PUT
+> URL (aws-sdk-s3, R2_* env vars) for the session's M4A; store audio_key and
+> audio_delete_at = now + 30 days on sessions; add a daily job that deletes
+> expired audio. (2) On session complete, enqueue a `grade_session` row in the
+> jobs table; write a worker (tokio task, SELECT ... FOR UPDATE SKIP LOCKED,
+> retries with backoff, max_attempts). (3) A `Grader` trait plus a provider
+> implementation (model from GRADER_MODEL) using packages/prompts/grader/v1.md
+> with a JSON schema: band per criterion 0-9 in 0.5 steps, evidence quotes,
+> corrections[{said, better, why_en, why_l1}] where l1 is the user's setting,
+> fillers, wpm, next_focus. Grade LEARNER turns only. (4) A `PronunciationScorer`
+> trait plus Azure Pronunciation Assessment on 3-5 sampled clips; store
+> pronunciation_results. (5) Combine into scores with grader_version.
+> (6) GET /api/v1/sessions/{id}/feedback. (7) Golden tests: 10 hand-graded
+> transcripts, fail if any band differs by more than 0.5. Fake impls for all
+> traits in tests. Log grader and Azure costs to session_costs. Then make the
+> mobile app upload the recording after complete and show the feedback screen
+> from the API (with 'explain in <l1>' per correction)."
+
+### 6.3 Prompt 7 — IELTS mock flow
+> "Build the IELTS-style mock: Part 1 (4-5 short questions), Part 2 (cue card
+> shown in the app, 60 s prep timer, 2 min talk, 1-2 rounding-off questions),
+> Part 3 (4-5 discussion questions linked to the Part 2 topic), using
+> packages/content/ielts (expand to 30+ cards). The examiner prompt is
+> packages/prompts/examiner/v1.md; pass the chosen cue card to the session as
+> its topic. Result page: overall band, four criterion bands with evidence, top
+> 3 fixes, and a server-generated share card image with the Play Store link.
+> Mocks consume entitlements.mocks_left when the plan includes them."
+
+### 6.4 Prompt 5 — relay mode (optional; needed for a hard cut-off with OpenAI)
+> "Add GET /api/v1/sessions/{id}/ws: an axum WebSocket that opens the upstream
+> connection from VoiceProvider::relay_target() with tokio-tungstenite, forwards
+> frames both ways with tokio::select!, counts seconds, sends
+> {type:'minutes', remaining_secs} updates, closes both sides at the session's
+> max_secs, handles backpressure with bounded channels, and logs exact usage to
+> session_costs. Test with a fake upstream; load test 200 concurrent sessions."
+
+### 6.5 Prompt 8 — billing
+> "Add billing. App: Google Play Billing subscriptions and minute packs
+> (RevenueCat optional), verified server-side. Web: Safepay (PKR) and Paddle or
+> Lemon Squeezy (USD) webhooks at POST /billing/webhooks/{provider} with
+> signature checks. Every source writes purchases (unique provider+provider_ref
+> for idempotency) and updates entitlements + minute_ledger (minutes::grant) in
+> one transaction. GET /api/v1/prices?country=PK from a prices table; never
+> hard-code a price in the app. Show minutes in the app header and a top-up
+> sheet at zero (replace the current 'coming soon' text on home and talk)."
+
+### 6.6 Habit loop, then launch
+- Streaks updated on session complete (in the user's timezone), push tokens
+  (`POST /api/v1/push-tokens`, Expo Notifications), daily reminder job, WhatsApp
+  utility template, and a placement test on first open (`POST /api/v1/placement`).
+- Launch checklist: privacy policy (voice data, 30-day deletion, no training),
+  delete-account endpoint (cascades already exist), Sentry, Play listing in
+  English and Urdu, production config (`APP_ENV=production` refuses the dev
+  secret, log OTP and fake voice).
+
+---
+
+## 7. Known gaps and small debts
+- The mobile app has no Google sign-in button and no OpenAI WebRTC path
+  (`transport: webrtc` shows "not supported").
+- The local M4A recording is made but not uploaded (step 6).
+- The feedback and progress screens show placeholders for bands.
+- Home and talk show "plans coming soon" at zero minutes (step 8).
+- `.env.example` still lists later-step variables with blank values.
+- The 22 `npm audit` moderate warnings come from Expo/Jest dev dependencies;
+  review them before release, and do not run `npm audit fix --force`, which
+  breaks the SDK pins.

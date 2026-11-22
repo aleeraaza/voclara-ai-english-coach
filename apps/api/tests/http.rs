@@ -86,6 +86,31 @@ async fn bad_phone_is_rejected_before_touching_db() {
 }
 
 #[tokio::test]
+async fn malformed_json_gets_our_error_format() {
+    use axum::{body::Body, http::Request};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+    let app = common::build_without_db();
+    for body in ["{not json", r#"{"wrong_field": 1}"#] {
+        let resp = app
+            .router
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/otp/send")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{body}");
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"]["code"], "bad_request");
+    }
+}
+
+#[tokio::test]
 async fn invalid_google_token_is_401() {
     let app = common::build_without_db();
     let (status, _) = app
