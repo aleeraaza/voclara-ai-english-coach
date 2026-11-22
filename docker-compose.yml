@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: voclara
+      POSTGRES_PASSWORD: voclara
+      POSTGRES_DB: voclara
+    ports:
+      - "5433:5432"   # host 5433: 5432 is used by other local Postgres instances
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voclara -d voclara"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # Optional: run the API in a container too (`docker compose --profile api up`).
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      BIND_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://voclara:voclara@db:5432/voclara
+      RUN_MIGRATIONS: "true"
+      LOG_FORMAT: json
+      RUST_LOG: voclara_api=info,tower_http=info
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

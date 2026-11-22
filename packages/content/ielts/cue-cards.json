@@ -1,0 +1,34 @@
+[
+  {
+    "id": "describe-a-teacher",
+    "topic": "People",
+    "prompt": "Describe a teacher who has influenced you.",
+    "bullets": [
+      "who this teacher was",
+      "what subject they taught",
+      "what they were like",
+      "and explain why they influenced you"
+    ],
+    "part3": [
+      "What makes a good teacher?",
+      "Do you think online teaching can replace classroom teaching?",
+      "How has the role of teachers changed in your country?"
+    ]
+  },
+  {
+    "id": "describe-a-journey",
+    "topic": "Travel",
+    "prompt": "Describe a memorable journey you have made.",
+    "bullets": [
+      "where you went",
+      "how you travelled",
+      "who you went with",
+      "and explain why it was memorable"
+    ],
+    "part3": [
+      "Why do people enjoy travelling?",
+      "How has transport changed in cities over the last twenty years?",
+      "Should governments spend more on public transport than on roads?"
+    ]
+  }
+]
