@@ -1,0 +1,68 @@
+{
+  "id": "10-band80-ambition",
+  "labels": "DRAFT - written and banded by the developer as a starting point. Have a certified IELTS examiner re-grade these before trusting the golden test.",
+  "l1": "ur",
+  "expected": {
+    "fluency": 8.0,
+    "lexical": 8.0,
+    "grammar": 8.0,
+    "overall": 8.0
+  },
+  "turns": [
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 0
+    },
+    {
+      "role": "learner",
+      "text": "Ambition is a double-edged sword, I think; it can propel people to remarkable achievements, but it can also become all-consuming.",
+      "t_ms": 3000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 17000
+    },
+    {
+      "role": "learner",
+      "text": "Growing up, I was encouraged to pursue medicine, largely because it's seen as a prestigious and secure career in our community.",
+      "t_ms": 20000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 34000
+    },
+    {
+      "role": "learner",
+      "text": "It took me a while to admit that my real passion lay in architecture, and switching fields was, frankly, quite a daunting decision.",
+      "t_ms": 37000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 51000
+    },
+    {
+      "role": "learner",
+      "text": "In hindsight, though, I'm glad I followed my instincts, since I find the work genuinely fulfilling rather than merely respectable.",
+      "t_ms": 54000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 68000
+    },
+    {
+      "role": "learner",
+      "text": "So if a younger person asked my advice, I'd tell them to weigh other people's expectations carefully, but ultimately to trust their own judgement.",
+      "t_ms": 71000
+    },
+    {
+      "role": "tutor",
+      "text": "Thank you, that's all.",
+      "t_ms": 85000
+    }
+  ]
+}

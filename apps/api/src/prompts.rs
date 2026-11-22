@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 const TUTOR_V1: &str = include_str!("../../../packages/prompts/tutor/v1.md");
 const EXAMINER_V1: &str = include_str!("../../../packages/prompts/examiner/v1.md");
 const INTERVIEWER_V1: &str = include_str!("../../../packages/prompts/interviewer/v1.md");
+const GRADER_V1: &str = include_str!("../../../packages/prompts/grader/v1.md");
 
 #[derive(Debug, Clone)]
 pub struct Prompt {
@@ -52,6 +53,7 @@ pub struct Prompts {
     pub tutor: Prompt,
     pub examiner: Prompt,
     pub interviewer: Prompt,
+    pub grader: Prompt,
 }
 
 impl Prompts {
@@ -60,6 +62,7 @@ impl Prompts {
             tutor: Prompt::parse(TUTOR_V1).context("tutor prompt")?,
             examiner: Prompt::parse(EXAMINER_V1).context("examiner prompt")?,
             interviewer: Prompt::parse(INTERVIEWER_V1).context("interviewer prompt")?,
+            grader: Prompt::parse(GRADER_V1).context("grader prompt")?,
         })
     }
 }
@@ -74,6 +77,12 @@ mod tests {
         assert_eq!(p.tutor.version, "tutor-v1");
         assert_eq!(p.examiner.version, "examiner-v1");
         assert_eq!(p.interviewer.version, "interviewer-v1");
+        assert_eq!(p.grader.version, "grader-v1");
+        let g = p.grader.render(&[("l1", "Urdu")]);
+        assert!(
+            g.contains("in English and in Urdu") && !g.contains('{'),
+            "{g}"
+        );
     }
 
     #[test]

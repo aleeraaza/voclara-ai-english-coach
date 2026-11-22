@@ -22,6 +22,8 @@ use crate::{error, routes};
         routes::sessions::start_session,
         routes::sessions::complete_session,
         routes::sessions::relay_socket,
+        routes::feedback::get_feedback,
+        routes::feedback::get_progress,
     ),
     components(schemas(
         routes::health::HealthResponse,
@@ -42,6 +44,14 @@ use crate::{error, routes};
         routes::sessions::TurnRole,
         routes::sessions::CompleteSessionResponse,
         crate::providers::voice::Transport,
+        routes::feedback::FeedbackResponse,
+        routes::feedback::Bands,
+        routes::feedback::ProgressResponse,
+        routes::feedback::ProgressItem,
+        crate::providers::grader::Correction,
+        crate::providers::grader::Evidence,
+        crate::domain::metrics::Fillers,
+        crate::domain::metrics::FillerCount,
         error::ErrorBody,
         error::ErrorDetail,
     )),
@@ -50,7 +60,8 @@ use crate::{error, routes};
         (name = "health", description = "Liveness and readiness"),
         (name = "auth", description = "Phone OTP, Google sign-in, token refresh"),
         (name = "me", description = "The signed-in user"),
-        (name = "sessions", description = "Live speaking sessions")
+        (name = "sessions", description = "Live speaking sessions"),
+        (name = "feedback", description = "Scores, corrections and progress")
     )
 )]
 pub struct ApiDoc;

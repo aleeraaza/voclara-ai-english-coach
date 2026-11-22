@@ -21,13 +21,14 @@ and Cursor loads them through `.cursor/rules/voclara.mdc`.
 | Prompt 4 | Expo Android app + live audio | 🟡 Code done and tested; **native build not yet verified; not committed** |
 | Prompt 4b | Next.js web layer | ⬜ Not started |
 | Prompt 5 | Relay mode WebSocket | ✅ Done (API side; the mobile app still uses direct mode) |
-| Prompt 6 | Grading pipeline (grader LLM + Azure pronunciation) | ⬜ Not started |
+| Prompt 6a | Grading from the transcript: jobs worker, grader LLM, feedback + progress, app screens | ✅ Done |
+| Prompt 6b | Pronunciation: clip upload (R2) + Azure Pronunciation Assessment | ⬜ Next |
 | Prompt 7 | IELTS mock flow (Parts 1-3, result page, share card) | ⬜ Not started (examiner prompt exists) |
 | Prompt 8 | Billing (Play Billing, Safepay, Paddle/Lemon Squeezy) | ⬜ Not started (tables exist) |
 | Week 7 | Streaks, push, placement test | ⬜ Not started (tables exist) |
 | Week 9 | Store listing, privacy policy, launch | ⬜ Not started |
 
-**Tests:** API 100 passing (`cargo test` against Postgres), mobile 44 passing
+**Tests:** API 129 passing (`cargo test` against Postgres), mobile 47 passing
 (`npm test`). Clippy, `tsc`, `expo lint` and `expo-doctor` are all clean. The
 relay load test ran 200 concurrent sessions × 10 round trips in 1.4 s
 (`RELAY_LOAD_SESSIONS=200 cargo test --test relay many_concurrent`; default 50).
@@ -151,6 +152,36 @@ packages/api-types/  openapi.json (exported) + schema.d.ts (generated)
 | POST | `/api/v1/sessions` | `{mode: talk\|mock\|interview, topic}` -> ephemeral voice token |
 | POST | `/api/v1/sessions/{id}/complete` | typed transcript; charges time; logs cost (direct mode only; 409 for relay sessions) |
 | GET | `/api/v1/sessions/{id}/ws?ticket=` | relay WebSocket (start the session with `relay: true`) |
+| GET | `/api/v1/sessions/{id}/feedback` | grading status + bands, evidence, corrections, fillers, wpm |
+| GET | `/api/v1/progress` | last 20 graded sessions, average of the last 5 real grades |
+
+### Grading (step 6a)
+- Completing a session (app `/complete` or relay close) queues one
+  `grade_session` job in the same transaction and sets
+  `sessions.grading_status = 'pending'`.
+- Workers (`src/worker.rs`, `WORKER_CONCURRENCY` per process) claim jobs with
+  `FOR UPDATE SKIP LOCKED`, retry with backoff (15 s, 30 s, 60 s… up to 1 h,
+  5 attempts), and requeue jobs stuck `running` for 10+ minutes.
+- The grader (`Grader` trait: Gemini `generateContent` with
+  `responseJsonSchema`, OpenAI Chat Completions with strict `json_schema`, or
+  `fake`) returns criterion bands, evidence quotes, corrections
+  (`said, better, why_en, why_l1`) and a next focus. Prompt: `grader-v1`,
+  with `{l1}` set to the learner's language name.
+- **Rust decides the exact parts** (`domain/metrics.rs`): bands are clamped to
+  0-9 and snapped *down* to 0.5 ("when unsure, pick the lower"); the overall
+  band is the IELTS-style rounded mean (x.25 -> x.5, x.75 -> next whole);
+  filler counts and words per minute are computed from the transcript.
+  Pronunciation stays `null` until step 6b, even if the model returns one.
+- Sessions with fewer than 25 learner words are `skipped`, not guessed.
+- Scores from the fake grader get `grader_version = "fake"` and `demo: true`
+  and are excluded from progress averages.
+- Grading cost goes to `session_costs` (`provider = grader:<name>`, tokens in
+  `tokens`, USD from `GRADER_USD_PER_1M_*`).
+- Golden set: `packages/content/golden` (10 transcripts, **draft** target
+  bands to be re-graded by a certified examiner).
+  `GRADER_GOLDEN=1 cargo test -p voclara-api --test golden_grader -- --nocapture`
+  runs the real grader and fails if any overall band is off by more than 0.5 or
+  fewer than 80% of criterion bands are within 0.5.
 
 ### Relay mode (step 5)
 `POST /api/v1/sessions {mode, topic, relay: true}` returns `transport: "relay"`,
@@ -205,8 +236,8 @@ provider in `src/providers/voice/{gemini,openai,fake}.rs`.
 ### Database tables
 `users, refresh_tokens, otp_codes, sessions, session_costs, scores,
 pronunciation_results, minute_ledger (+ minute_balances view), entitlements,
-purchases, streaks, push_tokens, jobs` (a Postgres job queue designed for
-`FOR UPDATE SKIP LOCKED` workers, not used yet).
+purchases, streaks, push_tokens, jobs` (the Postgres job queue that grading
+runs on; see "Grading" above).
 
 ---
 
@@ -216,8 +247,10 @@ purchases, streaks, push_tokens, jobs` (a Postgres job queue designed for
 | WhatsApp/SMS OTP provider (implement `OtpSender`) | any real sign-in; production refuses `OTP_PROVIDER=log` |
 | Google OAuth client ids (Android + web) and a native sign-in library | Google sign-in button (API side is done) |
 | Current Gemini Live model id + API key; measured cost per minute | real sessions; replace `VOICE_USD_PER_MIN=0.03` |
-| Cloudflare R2 bucket and keys | audio upload (step 6) |
-| Grader LLM and Azure Speech region | step 6 |
+| Grader model id (`GRADER_PROVIDER`, `GRADER_MODEL`) and its token prices | real feedback (step 6a is built; it runs `fake` until set) |
+| A certified IELTS examiner to re-grade `packages/content/golden` | trusting the golden test |
+| Cloudflare R2 bucket and keys | clip upload (step 6b) |
+| Azure Speech key and region | pronunciation scores (step 6b) |
 | Payment providers and accounts | step 8 |
 
 ---
@@ -252,24 +285,28 @@ section 3 and a commit.
 > packages/api-types. Add CORS to the API for the web origin (tower-http
 > CorsLayer, origins from config). Checkout comes in step 8; leave a placeholder."
 
-### 6.2 Prompt 6 — grading (the most valuable next backend step)
-> "Implement grading. (1) POST /api/v1/uploads/presign returns a presigned R2 PUT
-> URL (aws-sdk-s3, R2_* env vars) for the session's M4A; store audio_key and
-> audio_delete_at = now + 30 days on sessions; add a daily job that deletes
-> expired audio. (2) On session complete, enqueue a `grade_session` row in the
-> jobs table; write a worker (tokio task, SELECT ... FOR UPDATE SKIP LOCKED,
-> retries with backoff, max_attempts). (3) A `Grader` trait plus a provider
-> implementation (model from GRADER_MODEL) using packages/prompts/grader/v1.md
-> with a JSON schema: band per criterion 0-9 in 0.5 steps, evidence quotes,
-> corrections[{said, better, why_en, why_l1}] where l1 is the user's setting,
-> fillers, wpm, next_focus. Grade LEARNER turns only. (4) A `PronunciationScorer`
-> trait plus Azure Pronunciation Assessment on 3-5 sampled clips; store
-> pronunciation_results. (5) Combine into scores with grader_version.
-> (6) GET /api/v1/sessions/{id}/feedback. (7) Golden tests: 10 hand-graded
-> transcripts, fail if any band differs by more than 0.5. Fake impls for all
-> traits in tests. Log grader and Azure costs to session_costs. Then make the
-> mobile app upload the recording after complete and show the feedback screen
-> from the API (with 'explain in <l1>' per correction)."
+### 6.2 Step 6b — pronunciation scoring (next backend step)
+Step 6a grades from the transcript; this adds the pronunciation band.
+Design notes: Azure's REST short-audio API does not accept the app's M4A, so
+the app should upload short WAV clips (16 kHz PCM16 mono) of 3-5 learner
+utterances that it already has as PCM while streaming. Check the current Azure
+Pronunciation Assessment docs for unscripted (no reference text) assessment.
+> "Implement step 6b. (1) An `AudioStore` trait with an R2 implementation
+> that creates SigV4 presigned PUT/GET/DELETE URLs (R2_* env vars; prefer
+> signing with the hmac/sha2 crates we already have over aws-sdk-s3, whose
+> default TLS backend (aws-lc) does not build on this Windows GNU toolchain).
+> POST /api/v1/sessions/{id}/clips/presign {count<=5} returns PUT URLs for
+> `clips/{user}/{session}/{n}.wav`; POST /api/v1/sessions/{id}/clips/complete
+> {clips:[{index, transcript_text}]} records them (audio_delete_at = now + 30
+> days) and re-queues grading. (2) A `PronunciationScorer` trait plus Azure
+> Pronunciation Assessment (AZURE_SPEECH_KEY/REGION, region in config) and a
+> fake; store pronunciation_results (accuracy, fluency, prosody, completeness,
+> words). (3) In domain/grading.rs pass a short summary of those scores to the
+> grader (the `pronunciation_evidence` hook already exists) so the
+> pronunciation band and its evidence are filled. (4) A daily job deletes
+> clips past audio_delete_at. (5) In the app, keep the PCM of the longest 3-5
+> learner turns during a session, write them as WAV, upload after /complete
+> and call clips/complete. Fake impls and tests for every trait."
 
 ### 6.3 Prompt 7 — IELTS mock flow
 > "Build the IELTS-style mock: Part 1 (4-5 short questions), Part 2 (cue card

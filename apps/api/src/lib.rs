@@ -12,6 +12,7 @@ pub mod relay;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
+pub mod worker;
 
 use axum::{
     Router,

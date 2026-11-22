@@ -327,6 +327,32 @@
         ]
       }
     },
+    "/api/v1/progress": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Band trend for the progress screen.",
+        "operationId": "get_progress",
+        "responses": {
+          "200": {
+            "description": "Recent graded sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/sessions": {
       "post": {
         "tags": [
@@ -491,6 +517,54 @@
         ]
       }
     },
+    "/api/v1/sessions/{id}/feedback": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Feedback for one session. Poll while `status` is `pending`.",
+        "operationId": "get_feedback",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Session id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feedback (or its status)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/sessions/{id}/ws": {
       "get": {
         "tags": [
@@ -604,6 +678,42 @@
   },
   "components": {
     "schemas": {
+      "Bands": {
+        "type": "object",
+        "required": [
+          "fluency",
+          "lexical",
+          "grammar",
+          "overall"
+        ],
+        "properties": {
+          "fluency": {
+            "type": "number",
+            "format": "double"
+          },
+          "grammar": {
+            "type": "number",
+            "format": "double"
+          },
+          "lexical": {
+            "type": "number",
+            "format": "double"
+          },
+          "overall": {
+            "type": "number",
+            "format": "double",
+            "description": "IELTS-style overall band (estimated)."
+          },
+          "pronunciation": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "`null` until pronunciation scoring is available for the session."
+          }
+        }
+      },
       "CompleteSessionRequest": {
         "type": "object",
         "properties": {
@@ -642,6 +752,33 @@
           }
         }
       },
+      "Correction": {
+        "type": "object",
+        "required": [
+          "said",
+          "better",
+          "why_en",
+          "why_l1"
+        ],
+        "properties": {
+          "better": {
+            "type": "string",
+            "description": "A better way to say it."
+          },
+          "said": {
+            "type": "string",
+            "description": "What the learner said."
+          },
+          "why_en": {
+            "type": "string",
+            "description": "One-line reason in English."
+          },
+          "why_l1": {
+            "type": "string",
+            "description": "The same reason in the learner's explanation language."
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "description": "Wire format of every error: `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`.",
@@ -668,6 +805,181 @@
           "message": {
             "type": "string",
             "description": "Human-readable message; never contains internal details."
+          }
+        }
+      },
+      "Evidence": {
+        "type": "object",
+        "required": [
+          "fluency",
+          "lexical",
+          "grammar",
+          "pronunciation"
+        ],
+        "properties": {
+          "fluency": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grammar": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lexical": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pronunciation": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "FeedbackResponse": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "mode",
+          "status",
+          "demo",
+          "corrections",
+          "min_words"
+        ],
+        "properties": {
+          "bands": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Bands"
+              }
+            ]
+          },
+          "corrections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Correction"
+            }
+          },
+          "demo": {
+            "type": "boolean",
+            "description": "True when the scores come from the demo grader, not a real model."
+          },
+          "evidence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Evidence"
+              }
+            ]
+          },
+          "fillers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Fillers"
+              }
+            ]
+          },
+          "grader_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "l1": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language of the `why_l1` explanations."
+          },
+          "min_words": {
+            "type": "integer",
+            "description": "Learner words needed for a session to be graded.",
+            "minimum": 0
+          },
+          "mode": {
+            "type": "string"
+          },
+          "next_focus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "description": "none | pending | ready | failed | skipped (too little speech to grade)."
+          },
+          "wpm": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Estimated learner speaking speed."
+          }
+        }
+      },
+      "FillerCount": {
+        "type": "object",
+        "required": [
+          "word",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "word": {
+            "type": "string"
+          }
+        }
+      },
+      "Fillers": {
+        "type": "object",
+        "required": [
+          "total",
+          "per_100_words",
+          "top"
+        ],
+        "properties": {
+          "per_100_words": {
+            "type": "number",
+            "format": "double",
+            "description": "Fillers per 100 learner words."
+          },
+          "top": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FillerCount"
+            },
+            "description": "Most frequent first."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
@@ -832,6 +1144,88 @@
           },
           "phone": {
             "type": "string"
+          }
+        }
+      },
+      "ProgressItem": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "mode",
+          "started_at",
+          "overall",
+          "fluency",
+          "lexical",
+          "grammar",
+          "demo"
+        ],
+        "properties": {
+          "demo": {
+            "type": "boolean",
+            "description": "Demo grade from the fake grader."
+          },
+          "fluency": {
+            "type": "number",
+            "format": "double"
+          },
+          "grammar": {
+            "type": "number",
+            "format": "double"
+          },
+          "lexical": {
+            "type": "number",
+            "format": "double"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "overall": {
+            "type": "number",
+            "format": "double"
+          },
+          "pronunciation": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProgressResponse": {
+        "type": "object",
+        "required": [
+          "graded_sessions",
+          "recent"
+        ],
+        "properties": {
+          "average_overall_last5": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Mean overall band of the last 5 real grades."
+          },
+          "graded_sessions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "All graded sessions (real grades only)."
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgressItem"
+            },
+            "description": "Newest first, up to 20."
           }
         }
       },
@@ -1083,6 +1477,10 @@
     {
       "name": "sessions",
       "description": "Live speaking sessions"
+    },
+    {
+      "name": "feedback",
+      "description": "Scores, corrections and progress"
     }
   ]
 }

@@ -1,0 +1,68 @@
+{
+  "id": "01-band45-daily",
+  "labels": "DRAFT - written and banded by the developer as a starting point. Have a certified IELTS examiner re-grade these before trusting the golden test.",
+  "l1": "ur",
+  "expected": {
+    "fluency": 4.5,
+    "lexical": 4.5,
+    "grammar": 4.0,
+    "overall": 4.5
+  },
+  "turns": [
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 0
+    },
+    {
+      "role": "learner",
+      "text": "I am live in Lahore. Is big city. I like, um, the food there very much and the people.",
+      "t_ms": 3000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 17000
+    },
+    {
+      "role": "learner",
+      "text": "My work is in shop. I sell the mobile. Every day I go nine o'clock and come back night.",
+      "t_ms": 20000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 34000
+    },
+    {
+      "role": "learner",
+      "text": "Weekend I am... I am go with family to park. Children play and we eat, um, ice cream.",
+      "t_ms": 37000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 51000
+    },
+    {
+      "role": "learner",
+      "text": "I want learn English because, uh, for job. Good job need English. My English is not good.",
+      "t_ms": 54000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 68000
+    },
+    {
+      "role": "learner",
+      "text": "In future I want go abroad, maybe Dubai, for work. My cousin is there, he is say is good.",
+      "t_ms": 71000
+    },
+    {
+      "role": "tutor",
+      "text": "Thank you, that's all.",
+      "t_ms": 85000
+    }
+  ]
+}

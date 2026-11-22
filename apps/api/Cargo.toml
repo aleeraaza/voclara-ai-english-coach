@@ -3,6 +3,8 @@ name = "voclara-api"
 version = "0.1.0"
 edition = "2024"
 publish = false
+# Two binaries (the server and export_openapi): plain `cargo run` starts the server.
+default-run = "voclara-api"
 
 [lib]
 path = "src/lib.rs"

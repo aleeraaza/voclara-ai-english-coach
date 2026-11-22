@@ -70,9 +70,10 @@ Following the product guide, one step at a time:
 2. ✅ Auth (phone OTP, Google, rotating refresh tokens), `/me`, minute wallet
 3. ✅ VoiceProvider trait (Gemini Live, OpenAI Realtime, fake), `POST /api/v1/sessions`,
    `POST /api/v1/sessions/{id}/complete`
-4. 🟡 Android app and live audio (code done; native build blocked by Windows
-   path length, see docs/HANDOFF.md); 4b web layer
+4. ✅ Android app and live audio (installed on a phone; local Windows builds hit
+   the path-length limit, see docs/HANDOFF.md); 4b web layer still to do
 5. ✅ Relay mode (API side)
-6. Grading pipeline ← next
+6. 🟡 Grading: 6a transcript grading done (feedback + progress in the app);
+   6b pronunciation (R2 clips + Azure) ← next
 7. IELTS mock flow
 8. Billing

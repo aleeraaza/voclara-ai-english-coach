@@ -1,0 +1,68 @@
+{
+  "id": "07-band65-environment",
+  "labels": "DRAFT - written and banded by the developer as a starting point. Have a certified IELTS examiner re-grade these before trusting the golden test.",
+  "l1": "ur",
+  "expected": {
+    "fluency": 6.5,
+    "lexical": 6.5,
+    "grammar": 6.0,
+    "overall": 6.5
+  },
+  "turns": [
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 0
+    },
+    {
+      "role": "learner",
+      "text": "Air pollution has become a serious problem in Lahore, especially in winter when the smog gets really thick.",
+      "t_ms": 3000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 17000
+    },
+    {
+      "role": "learner",
+      "text": "A lot of it comes from vehicles and from farmers burning crop residue in the surrounding areas.",
+      "t_ms": 20000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 34000
+    },
+    {
+      "role": "learner",
+      "text": "The government has tried a few measures, like closing schools on the worst days, but these are only temporary solutions.",
+      "t_ms": 37000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 51000
+    },
+    {
+      "role": "learner",
+      "text": "What we really need is better public transport and stricter rules for factories, which would cut emissions over time.",
+      "t_ms": 54000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 68000
+    },
+    {
+      "role": "learner",
+      "text": "Individuals can contribute as well, for instance by car-sharing, although I admit that's not very common here yet.",
+      "t_ms": 71000
+    },
+    {
+      "role": "tutor",
+      "text": "Thank you, that's all.",
+      "t_ms": 85000
+    }
+  ]
+}

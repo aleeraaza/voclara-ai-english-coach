@@ -1,0 +1,68 @@
+{
+  "id": "06-band65-education",
+  "labels": "DRAFT - written and banded by the developer as a starting point. Have a certified IELTS examiner re-grade these before trusting the golden test.",
+  "l1": "ur",
+  "expected": {
+    "fluency": 6.5,
+    "lexical": 6.5,
+    "grammar": 6.5,
+    "overall": 6.5
+  },
+  "turns": [
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 0
+    },
+    {
+      "role": "learner",
+      "text": "In my view, the education system in Pakistan focuses too heavily on memorisation rather than critical thinking.",
+      "t_ms": 3000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 17000
+    },
+    {
+      "role": "learner",
+      "text": "Students often learn answers by heart just to pass exams, and then they forget most of it after a few weeks.",
+      "t_ms": 20000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 34000
+    },
+    {
+      "role": "learner",
+      "text": "I believe schools should encourage more project-based learning, where students actually apply what they've studied.",
+      "t_ms": 37000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 51000
+    },
+    {
+      "role": "learner",
+      "text": "That said, I don't think it's entirely the teachers' fault, since they're under pressure to complete the syllabus on time.",
+      "t_ms": 54000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 68000
+    },
+    {
+      "role": "learner",
+      "text": "If I were in charge, I'd probably start by reducing class sizes, because it's almost impossible to give attention to sixty students.",
+      "t_ms": 71000
+    },
+    {
+      "role": "tutor",
+      "text": "Thank you, that's all.",
+      "t_ms": 85000
+    }
+  ]
+}

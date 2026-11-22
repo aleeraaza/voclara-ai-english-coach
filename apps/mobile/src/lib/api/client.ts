@@ -12,6 +12,8 @@ import { RefreshRejected, TokenManager, type TokenPair, type TokenStorage } from
 export type Schemas = components['schemas'];
 export type Me = Schemas['MeResponse'];
 export type StartedSession = Schemas['StartSessionResponse'];
+export type Feedback = Schemas['FeedbackResponse'];
+export type Progress = Schemas['ProgressResponse'];
 
 /**
  * API base URL. Set EXPO_PUBLIC_API_URL in apps/mobile/.env.local.

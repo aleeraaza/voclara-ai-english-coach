@@ -1,0 +1,68 @@
+{
+  "id": "04-band55-travel",
+  "labels": "DRAFT - written and banded by the developer as a starting point. Have a certified IELTS examiner re-grade these before trusting the golden test.",
+  "l1": "ur",
+  "expected": {
+    "fluency": 5.5,
+    "lexical": 5.5,
+    "grammar": 5.5,
+    "overall": 5.5
+  },
+  "turns": [
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 0
+    },
+    {
+      "role": "learner",
+      "text": "Last year I travelled to the northern areas with my friends, we went to Hunza and Skardu.",
+      "t_ms": 3000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 17000
+    },
+    {
+      "role": "learner",
+      "text": "The journey was very long, around eighteen hours by road, but the views was absolutely amazing.",
+      "t_ms": 20000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 34000
+    },
+    {
+      "role": "learner",
+      "text": "The most memorable thing was the Attabad lake, the water is so blue, like nothing I have seen before.",
+      "t_ms": 37000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 51000
+    },
+    {
+      "role": "learner",
+      "text": "We stayed in a small hotel, and the local people were really friendly, they invited us for tea.",
+      "t_ms": 54000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 68000
+    },
+    {
+      "role": "learner",
+      "text": "I think everyone in Pakistan should visit the north at least one time, it changes your mind about our country.",
+      "t_ms": 71000
+    },
+    {
+      "role": "tutor",
+      "text": "Thank you, that's all.",
+      "t_ms": 85000
+    }
+  ]
+}

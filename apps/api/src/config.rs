@@ -169,6 +169,91 @@ impl VoiceConfig {
     }
 }
 
+/// Which text LLM grades finished sessions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GraderKind {
+    Gemini,
+    OpenAi,
+    /// Deterministic demo feedback, for building the app without keys.
+    Fake,
+}
+
+impl FromStr for GraderKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "gemini" => Ok(Self::Gemini),
+            "openai" => Ok(Self::OpenAi),
+            "fake" => Ok(Self::Fake),
+            other => anyhow::bail!("unknown grader '{other}' (gemini | openai | fake)"),
+        }
+    }
+}
+
+/// Grading settings. API keys are shared with the voice config
+/// (GEMINI_API_KEY / OPENAI_API_KEY); the model is separate.
+#[derive(Clone)]
+pub struct GraderConfig {
+    pub provider: GraderKind,
+    pub model: Option<String>,
+    /// Price per million tokens, for session_costs. Set from the provider's
+    /// pricing page; 0 means "not set" (tokens are still logged).
+    pub usd_per_1m_input: f64,
+    pub usd_per_1m_output: f64,
+    /// Background job workers per API process.
+    pub worker_concurrency: usize,
+}
+
+impl GraderConfig {
+    pub fn fake() -> Self {
+        Self {
+            provider: GraderKind::Fake,
+            model: None,
+            usd_per_1m_input: 0.0,
+            usd_per_1m_output: 0.0,
+            worker_concurrency: 2,
+        }
+    }
+
+    fn from_env() -> Result<Self> {
+        Ok(Self {
+            provider: parse_or("GRADER_PROVIDER", "fake")?,
+            model: optional("GRADER_MODEL"),
+            usd_per_1m_input: parse_or("GRADER_USD_PER_1M_INPUT", "0")?,
+            usd_per_1m_output: parse_or("GRADER_USD_PER_1M_OUTPUT", "0")?,
+            worker_concurrency: parse_or("WORKER_CONCURRENCY", "2")?,
+        })
+    }
+
+    fn validate(&self, env: AppEnv, voice: &VoiceConfig) -> Result<()> {
+        match self.provider {
+            GraderKind::Gemini => {
+                if voice.gemini_api_key.is_none() || self.model.is_none() {
+                    anyhow::bail!("the Gemini grader needs GEMINI_API_KEY and GRADER_MODEL");
+                }
+            }
+            GraderKind::OpenAi => {
+                if voice.openai_api_key.is_none() || self.model.is_none() {
+                    anyhow::bail!("the OpenAI grader needs OPENAI_API_KEY and GRADER_MODEL");
+                }
+            }
+            GraderKind::Fake => {
+                if env == AppEnv::Production {
+                    anyhow::bail!("the fake grader cannot run in production");
+                }
+            }
+        }
+        if !(1..=32).contains(&self.worker_concurrency) {
+            anyhow::bail!("WORKER_CONCURRENCY must be 1-32");
+        }
+        if self.usd_per_1m_input < 0.0 || self.usd_per_1m_output < 0.0 {
+            anyhow::bail!("grader prices cannot be negative");
+        }
+        Ok(())
+    }
+}
+
 const DEV_SECRET_PREFIX: &str = "dev-only";
 
 /// Runtime configuration. Deliberately not `Debug`: it holds secrets.
@@ -189,6 +274,7 @@ pub struct Config {
     pub google_client_ids: Vec<String>,
     pub otp_provider: OtpProvider,
     pub voice: VoiceConfig,
+    pub grader: GraderConfig,
 }
 
 impl Config {
@@ -212,6 +298,7 @@ impl Config {
                 .collect(),
             otp_provider: parse_or("OTP_PROVIDER", "log")?,
             voice: VoiceConfig::from_env()?,
+            grader: GraderConfig::from_env()?,
         };
         config.validate()?;
         Ok(config)
@@ -230,6 +317,7 @@ impl Config {
             }
         }
         self.voice.validate(self.app_env)?;
+        self.grader.validate(self.app_env, &self.voice)?;
         Ok(())
     }
 }
@@ -274,6 +362,7 @@ mod tests {
             google_client_ids: vec![],
             otp_provider: OtpProvider::Log,
             voice: VoiceConfig::fake(),
+            grader: GraderConfig::fake(),
         }
     }
 

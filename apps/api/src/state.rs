@@ -6,7 +6,7 @@ use crate::{
     auth::JwtKeys,
     config::Config,
     prompts::Prompts,
-    providers::{google::GoogleVerifier, otp::OtpSender, voice::VoiceProviders},
+    providers::{google::GoogleVerifier, grader::Grader, otp::OtpSender, voice::VoiceProviders},
     relay::RelayLimits,
 };
 
@@ -15,6 +15,7 @@ pub struct Providers {
     pub otp: Arc<dyn OtpSender>,
     pub google: Arc<dyn GoogleVerifier>,
     pub voice: Arc<VoiceProviders>,
+    pub grader: Arc<dyn Grader>,
 }
 
 /// Shared state handed to every handler. Cheap to clone: every field is a
@@ -28,6 +29,7 @@ pub struct AppState {
     pub otp: Arc<dyn OtpSender>,
     pub google: Arc<dyn GoogleVerifier>,
     pub voice: Arc<VoiceProviders>,
+    pub grader: Arc<dyn Grader>,
     /// Relay timeouts; tests shorten them.
     pub relay_limits: Arc<RelayLimits>,
 }
@@ -46,6 +48,7 @@ impl AppState {
             otp: providers.otp,
             google: providers.google,
             voice: providers.voice,
+            grader: providers.grader,
             relay_limits: Arc::new(RelayLimits::default()),
         })
     }

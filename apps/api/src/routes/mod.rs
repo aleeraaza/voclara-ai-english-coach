@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod feedback;
 pub mod health;
 pub mod me;
 pub mod sessions;
@@ -14,4 +15,5 @@ pub fn v1() -> Router<AppState> {
         .merge(auth::router())
         .merge(me::router())
         .merge(sessions::router())
+        .merge(feedback::router())
 }

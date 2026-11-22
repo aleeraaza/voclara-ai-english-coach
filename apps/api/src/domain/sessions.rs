@@ -12,7 +12,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use crate::{
-    domain::minutes,
+    domain::{jobs, minutes},
     error::{AppError, AppResult},
 };
 
@@ -360,6 +360,19 @@ pub async fn complete(
         usage,
     )
     .await?;
+
+    // Queue grading in the same transaction: a completed session always has
+    // exactly one grading job (a unique index de-duplicates retries).
+    jobs::enqueue(
+        &mut tx,
+        jobs::GRADE_SESSION,
+        serde_json::json!({ "session_id": session_id }),
+    )
+    .await?;
+    sqlx::query("UPDATE sessions SET grading_status = 'pending' WHERE id = $1")
+        .bind(session_id)
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
 
     Ok(Completed {

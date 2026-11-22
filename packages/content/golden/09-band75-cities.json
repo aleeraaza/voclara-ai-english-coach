@@ -1,0 +1,68 @@
+{
+  "id": "09-band75-cities",
+  "labels": "DRAFT - written and banded by the developer as a starting point. Have a certified IELTS examiner re-grade these before trusting the golden test.",
+  "l1": "ur",
+  "expected": {
+    "fluency": 7.5,
+    "lexical": 7.5,
+    "grammar": 7.5,
+    "overall": 7.5
+  },
+  "turns": [
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 0
+    },
+    {
+      "role": "learner",
+      "text": "Rapid urbanisation is arguably reshaping South Asian societies more profoundly than any other trend at the moment.",
+      "t_ms": 3000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 17000
+    },
+    {
+      "role": "learner",
+      "text": "On the one hand, cities concentrate opportunities, so migrants from rural areas can access jobs and education they'd never otherwise have.",
+      "t_ms": 20000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 34000
+    },
+    {
+      "role": "learner",
+      "text": "On the other hand, infrastructure simply hasn't kept pace, which is why we see informal settlements springing up on the outskirts.",
+      "t_ms": 37000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 51000
+    },
+    {
+      "role": "learner",
+      "text": "What concerns me most is that planning tends to be reactive; authorities address problems only once they've become unmanageable.",
+      "t_ms": 54000
+    },
+    {
+      "role": "tutor",
+      "text": "Tell me more about that.",
+      "t_ms": 68000
+    },
+    {
+      "role": "learner",
+      "text": "If I had to prioritise one policy, it would be investing in mid-sized cities, so that the pressure on megacities like Karachi eases somewhat.",
+      "t_ms": 71000
+    },
+    {
+      "role": "tutor",
+      "text": "Thank you, that's all.",
+      "t_ms": 85000
+    }
+  ]
+}

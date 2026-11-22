@@ -107,6 +107,23 @@ export interface paths {
         patch: operations["update_me"];
         trace?: never;
     };
+    "/api/v1/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Band trend for the progress screen. */
+        get: operations["get_progress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -138,6 +155,23 @@ export interface paths {
         put?: never;
         /** Finish a session: stores the transcript and charges the elapsed time. */
         post: operations["complete_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Feedback for one session. Poll while `status` is `pending`. */
+        get: operations["get_feedback"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -204,6 +238,24 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Bands: {
+            /** Format: double */
+            fluency: number;
+            /** Format: double */
+            grammar: number;
+            /** Format: double */
+            lexical: number;
+            /**
+             * Format: double
+             * @description IELTS-style overall band (estimated).
+             */
+            overall: number;
+            /**
+             * Format: double
+             * @description `null` until pronunciation scoring is available for the session.
+             */
+            pronunciation?: number | null;
+        };
         CompleteSessionRequest: {
             /** @description Caption log from the session, in order. */
             transcript?: components["schemas"]["TranscriptTurn"][] | null;
@@ -219,6 +271,16 @@ export interface components {
             /** Format: uuid */
             session_id: string;
         };
+        Correction: {
+            /** @description A better way to say it. */
+            better: string;
+            /** @description What the learner said. */
+            said: string;
+            /** @description One-line reason in English. */
+            why_en: string;
+            /** @description The same reason in the learner's explanation language. */
+            why_l1: string;
+        };
         /** @description Wire format of every error: `{"error": {"code": "...", "message": "..."}}`. */
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
@@ -228,6 +290,52 @@ export interface components {
             code: string;
             /** @description Human-readable message; never contains internal details. */
             message: string;
+        };
+        Evidence: {
+            fluency: string[];
+            grammar: string[];
+            lexical: string[];
+            pronunciation: string[];
+        };
+        FeedbackResponse: {
+            bands?: null | components["schemas"]["Bands"];
+            corrections: components["schemas"]["Correction"][];
+            /** @description True when the scores come from the demo grader, not a real model. */
+            demo: boolean;
+            evidence?: null | components["schemas"]["Evidence"];
+            fillers?: null | components["schemas"]["Fillers"];
+            grader_version?: string | null;
+            /** @description Language of the `why_l1` explanations. */
+            l1?: string | null;
+            /** @description Learner words needed for a session to be graded. */
+            min_words: number;
+            mode: string;
+            next_focus?: string | null;
+            /** Format: uuid */
+            session_id: string;
+            /** @description none | pending | ready | failed | skipped (too little speech to grade). */
+            status: string;
+            /**
+             * Format: int32
+             * @description Estimated learner speaking speed.
+             */
+            wpm?: number | null;
+        };
+        FillerCount: {
+            /** Format: int32 */
+            count: number;
+            word: string;
+        };
+        Fillers: {
+            /**
+             * Format: double
+             * @description Fillers per 100 learner words.
+             */
+            per_100_words: number;
+            /** @description Most frequent first. */
+            top: components["schemas"]["FillerCount"][];
+            /** Format: int32 */
+            total: number;
         };
         GoogleLoginRequest: {
             /** @description The ID token from Google Sign-In on the device or web. */
@@ -287,6 +395,39 @@ export interface components {
         OtpVerifyRequest: {
             code: string;
             phone: string;
+        };
+        ProgressItem: {
+            /** @description Demo grade from the fake grader. */
+            demo: boolean;
+            /** Format: double */
+            fluency: number;
+            /** Format: double */
+            grammar: number;
+            /** Format: double */
+            lexical: number;
+            mode: string;
+            /** Format: double */
+            overall: number;
+            /** Format: double */
+            pronunciation?: number | null;
+            /** Format: uuid */
+            session_id: string;
+            /** Format: date-time */
+            started_at: string;
+        };
+        ProgressResponse: {
+            /**
+             * Format: double
+             * @description Mean overall band of the last 5 real grades.
+             */
+            average_overall_last5?: number | null;
+            /**
+             * Format: int64
+             * @description All graded sessions (real grades only).
+             */
+            graded_sessions: number;
+            /** @description Newest first, up to 20. */
+            recent: components["schemas"]["ProgressItem"][];
         };
         RefreshRequest: {
             refresh_token: string;
@@ -654,6 +795,26 @@ export interface operations {
             };
         };
     };
+    get_progress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent graded sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressResponse"];
+                };
+            };
+        };
+    };
     start_session: {
         parameters: {
             query?: never;
@@ -768,6 +929,38 @@ export interface operations {
             };
             /** @description Session already ended, or it is a relay session */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Feedback (or its status) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
+                };
+            };
+            /** @description No such session for this user */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

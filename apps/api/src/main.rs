@@ -5,14 +5,15 @@ use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use voclara_api::{
     AppState, MIGRATOR,
-    config::{Config, OtpProvider, VoiceProviderKind},
+    config::{Config, GraderKind, OtpProvider, VoiceProviderKind},
     providers::{
         google::{GoogleJwksVerifier, GoogleVerifier},
+        grader,
         otp::{LogOtpSender, OtpSender},
         voice,
     },
     state::Providers,
-    telemetry,
+    telemetry, worker,
 };
 
 #[tokio::main]
@@ -57,8 +58,32 @@ async fn main() -> anyhow::Result<()> {
         "voice provider ready"
     );
 
+    if config.grader.provider == GraderKind::Fake {
+        tracing::warn!("GRADER_PROVIDER=fake: feedback is demo data, not a real grade");
+    }
+    let grader = grader::from_config(&config)?;
+    tracing::info!(
+        grader = grader.name(),
+        model = grader.model(),
+        "grader ready"
+    );
+
     let addr = config.bind_addr;
-    let state = AppState::new(db, config, Providers { otp, google, voice })?;
+    let workers = config.grader.worker_concurrency;
+    let state = AppState::new(
+        db,
+        config,
+        Providers {
+            otp,
+            google,
+            voice,
+            grader,
+        },
+    )?;
+    // Background jobs (grading) run in this process; they stop when it exits
+    // and an interrupted job is picked up again on the next start.
+    let _workers = worker::spawn(state.clone(), workers);
+    tracing::info!(workers, "job workers started");
     let app = voclara_api::app(state);
     let listener = TcpListener::bind(addr)
         .await

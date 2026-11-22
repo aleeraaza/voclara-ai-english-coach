@@ -20,10 +20,11 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use tower::ServiceExt;
 use voclara_api::{
     AppState,
-    config::{AppEnv, Config, LogFormat, OtpProvider, VoiceConfig},
+    config::{AppEnv, Config, GraderConfig, LogFormat, OtpProvider, VoiceConfig},
     error::{AppError, AppResult},
     providers::{
         google::{GoogleIdentity, GoogleVerifier},
+        grader::{Correction, Evidence, GradeInput, GradeOutput, GradeUsage, Grader},
         otp::OtpSender,
         voice::{
             RelayCodec, RelayTarget, SessionConfig, Transport, VoiceProvider, VoiceProviders,
@@ -50,6 +51,7 @@ pub fn test_config(database_url: &str) -> Config {
         google_client_ids: vec!["test-client".into()],
         otp_provider: OtpProvider::Log,
         voice: VoiceConfig::fake(),
+        grader: GraderConfig::fake(),
     }
 }
 
@@ -185,11 +187,95 @@ impl GoogleVerifier for FakeGoogle {
     }
 }
 
+/// Grader for tests: returns `output` (bands can be set), records every input,
+/// and fails the next `fail_next` calls with a retryable error.
+pub struct TestGrader {
+    pub output: Mutex<GradeOutput>,
+    pub inputs: Mutex<Vec<GradeInput>>,
+    pub fail_next: std::sync::atomic::AtomicU32,
+}
+
+impl TestGrader {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            output: Mutex::new(GradeOutput {
+                fluency: 6.3, // deliberately off-grid: the API must snap it down to 6.0
+                lexical: 6.5,
+                grammar: 5.5,
+                pronunciation: Some(7.0), // must be ignored: no pronunciation evidence yet
+                evidence: Evidence {
+                    fluency: vec!["I go to office yesterday".into()],
+                    lexical: vec!["very much big".into()],
+                    grammar: vec!["I go to office yesterday".into()],
+                    pronunciation: vec!["should be dropped".into()],
+                },
+                corrections: vec![Correction {
+                    said: "I go to office yesterday".into(),
+                    better: "I went to the office yesterday".into(),
+                    why_en: "Use the past tense for yesterday.".into(),
+                    why_l1: "کل کے لیے ماضی کا صیغہ استعمال کریں۔".into(),
+                }],
+                next_focus: "Past tense verbs".into(),
+            }),
+            inputs: Mutex::new(vec![]),
+            fail_next: 0.into(),
+        })
+    }
+
+    pub fn last_input(&self) -> GradeInput {
+        self.inputs
+            .lock()
+            .unwrap()
+            .last()
+            .cloned()
+            .expect("grader not called")
+    }
+
+    pub fn calls(&self) -> usize {
+        self.inputs.lock().unwrap().len()
+    }
+}
+
+#[async_trait]
+impl Grader for TestGrader {
+    fn name(&self) -> &'static str {
+        "test"
+    }
+
+    fn model(&self) -> &str {
+        "test-grader"
+    }
+
+    async fn grade(&self, input: &GradeInput) -> AppResult<(GradeOutput, GradeUsage)> {
+        self.inputs.lock().unwrap().push(input.clone());
+        let fail = self
+            .fail_next
+            .try_update(
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+                |n| n.checked_sub(1),
+            )
+            .is_ok();
+        if fail {
+            return Err(AppError::Unavailable);
+        }
+        Ok((
+            self.output.lock().unwrap().clone(),
+            GradeUsage {
+                input_tokens: 1_200,
+                output_tokens: 300,
+            },
+        ))
+    }
+}
+
 pub struct TestApp {
     pub router: Router,
+    pub state: AppState,
     pub otp: Arc<FakeOtp>,
     pub voice: Arc<TestVoice>,
     pub fallback: Option<Arc<TestVoice>>,
+    pub grader: Arc<TestGrader>,
     pub db: PgPool,
 }
 
@@ -215,6 +301,7 @@ fn build_full(db: PgPool, with_fallback: bool, limits: RelayLimits) -> TestApp {
         voice.clone(),
         fallback.clone().map(|f| f as Arc<dyn VoiceProvider>),
     );
+    let grader = TestGrader::new();
     let state = AppState::new(
         db.clone(),
         test_config("postgres://unused"),
@@ -222,6 +309,7 @@ fn build_full(db: PgPool, with_fallback: bool, limits: RelayLimits) -> TestApp {
             otp: otp.clone(),
             google: Arc::new(FakeGoogle),
             voice: Arc::new(providers),
+            grader: grader.clone(),
         },
     )
     .unwrap();
@@ -230,10 +318,12 @@ fn build_full(db: PgPool, with_fallback: bool, limits: RelayLimits) -> TestApp {
         ..state
     };
     TestApp {
-        router: voclara_api::app(state),
+        router: voclara_api::app(state.clone()),
+        state,
         otp,
         voice,
         fallback,
+        grader,
         db,
     }
 }
@@ -247,6 +337,11 @@ impl TestApp {
         let router = self.router.clone();
         tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         addr
+    }
+
+    /// Drain the job queue now (instead of waiting for background workers).
+    pub async fn run_jobs(&self) -> usize {
+        voclara_api::worker::run_pending(&self.state).await.unwrap()
     }
 }
 

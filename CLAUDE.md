@@ -47,6 +47,10 @@ layer (landing, quiz funnel, checkout, account, SEO). One Rust API for both.
   never forward a client setup. No unbounded queues: await sends in the select loop.
   Relay sessions are completed by the server, never by the app's /complete.
 - Never log URLs with query strings (relay tickets travel in `?ticket=`).
+- Grading: the LLM only judges; bands are snapped, the overall band, fillers and
+  wpm are computed in domain/metrics.rs. Background work goes through the jobs
+  table (src/worker.rs), never ad-hoc tokio::spawn from handlers.
+- Tests in one file that drain the job queue must serialise (see tests/grading.rs).
 
 ## Local dev
 - `docker compose up -d db` starts Postgres 16 on localhost:5433 (5432 is taken by other local Postgres).
