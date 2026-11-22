@@ -6,6 +6,7 @@ pub mod config;
 pub mod domain;
 pub mod error;
 pub mod openapi;
+pub mod prompts;
 pub mod providers;
 pub mod routes;
 pub mod state;

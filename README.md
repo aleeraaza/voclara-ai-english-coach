@@ -38,6 +38,20 @@ Run database tests with `DATABASE_URL=postgres://voclara:voclara@localhost:5433/
 Clients must never call `/auth/refresh` twice in parallel with the same token:
 replaying a used refresh token is treated as theft and signs out that device.
 
+### Live sessions
+
+`VOICE_PROVIDER=fake` (the default) returns dummy tokens so the app can be built
+without keys. For real voice set `VOICE_PROVIDER=gemini`, `GEMINI_API_KEY` and
+`GEMINI_LIVE_MODEL` (optionally `VOICE_FALLBACK=openai` with the OpenAI keys).
+
+- One running session per user; its limit is min(minutes left, mode limit:
+  talk 10 min, mock/interview 15 min).
+- Gemini tokens are single-use and Gemini rejects messages after the limit
+  (`hard_cutoff: true`). OpenAI cannot be cut off server-side in direct mode
+  (`hard_cutoff: false`): the app must end the call at `session_ends_at`.
+- `complete` charges the time the server saw, capped at the limit. A session
+  never completed is charged its full limit once it is 2 minutes overdue.
+
 Checks before every commit:
 
 ```bash
@@ -50,8 +64,9 @@ Following the product guide, one step at a time:
 
 1. ✅ Scaffold: API skeleton, migrations, Docker, CI
 2. ✅ Auth (phone OTP, Google, rotating refresh tokens), `/me`, minute wallet
-3. VoiceProvider trait and `POST /api/v1/sessions` ← next
-4. Android app and live audio; 4b web layer
+3. ✅ VoiceProvider trait (Gemini Live, OpenAI Realtime, fake), `POST /api/v1/sessions`,
+   `POST /api/v1/sessions/{id}/complete`
+4. Android app and live audio; 4b web layer ← next
 5. Relay mode (optional)
 6. Grading pipeline
 7. IELTS mock flow

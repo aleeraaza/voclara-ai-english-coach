@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthUser,
-    domain::{minutes, users},
+    domain::{minutes, sessions, users},
     error::{AppResult, ErrorBody},
     state::AppState,
 };
@@ -61,6 +61,8 @@ pub struct UpdateMeRequest {
 
 async fn load(state: &AppState, id: Uuid) -> AppResult<MeResponse> {
     let user = users::get(&state.db, id).await?;
+    // Charge any abandoned session first so the balance shown is the real one.
+    sessions::settle_abandoned_for(&state.db, id, state.config.voice.usd_per_min).await?;
     let plan = users::current_plan(&state.db, id).await?;
     let balance_secs = minutes::balance(&state.db, id).await?;
     let daily_drill_secs_left = minutes::drill_secs_left_today(&state.db, id).await?;

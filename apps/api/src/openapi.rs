@@ -19,6 +19,8 @@ use crate::{error, routes};
         routes::auth::logout,
         routes::me::get_me,
         routes::me::update_me,
+        routes::sessions::start_session,
+        routes::sessions::complete_session,
     ),
     components(schemas(
         routes::health::HealthResponse,
@@ -32,6 +34,11 @@ use crate::{error, routes};
         routes::me::MinutesInfo,
         routes::me::StreakInfo,
         routes::me::UpdateMeRequest,
+        routes::sessions::StartSessionRequest,
+        routes::sessions::StartSessionResponse,
+        routes::sessions::CompleteSessionRequest,
+        routes::sessions::CompleteSessionResponse,
+        crate::providers::voice::Transport,
         error::ErrorBody,
         error::ErrorDetail,
     )),
@@ -39,7 +46,8 @@ use crate::{error, routes};
     tags(
         (name = "health", description = "Liveness and readiness"),
         (name = "auth", description = "Phone OTP, Google sign-in, token refresh"),
-        (name = "me", description = "The signed-in user")
+        (name = "me", description = "The signed-in user"),
+        (name = "sessions", description = "Live speaking sessions")
     )
 )]
 pub struct ApiDoc;

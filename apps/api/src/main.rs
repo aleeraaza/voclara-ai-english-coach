@@ -5,11 +5,13 @@ use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use voclara_api::{
     AppState, MIGRATOR,
-    config::{Config, OtpProvider},
+    config::{Config, OtpProvider, VoiceProviderKind},
     providers::{
         google::{GoogleJwksVerifier, GoogleVerifier},
         otp::{LogOtpSender, OtpSender},
+        voice,
     },
+    state::Providers,
     telemetry,
 };
 
@@ -44,8 +46,20 @@ async fn main() -> anyhow::Result<()> {
     let google: Arc<dyn GoogleVerifier> =
         Arc::new(GoogleJwksVerifier::new(config.google_client_ids.clone())?);
 
+    if config.voice.primary == VoiceProviderKind::Fake {
+        tracing::warn!("VOICE_PROVIDER=fake: sessions get dummy tokens, no real voice");
+    }
+    let voice = Arc::new(voice::from_config(&config.voice)?);
+    tracing::info!(
+        provider = voice.primary().name(),
+        model = voice.primary().model(),
+        fallback = ?config.voice.fallback,
+        "voice provider ready"
+    );
+
     let addr = config.bind_addr;
-    let app = voclara_api::app(AppState::new(db, config, otp, google));
+    let state = AppState::new(db, config, Providers { otp, google, voice })?;
+    let app = voclara_api::app(state);
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("binding {addr}"))?;

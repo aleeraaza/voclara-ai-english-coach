@@ -6,6 +6,8 @@ FROM rust:1-bookworm AS builder
 WORKDIR /src
 COPY Cargo.toml Cargo.lock* clippy.toml ./
 COPY apps/api apps/api
+# Prompts are embedded at compile time (include_str!).
+COPY packages/prompts packages/prompts
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release -p voclara-api \

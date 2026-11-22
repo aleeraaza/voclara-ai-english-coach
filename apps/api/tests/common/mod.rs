@@ -20,12 +20,14 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use tower::ServiceExt;
 use voclara_api::{
     AppState,
-    config::{AppEnv, Config, LogFormat, OtpProvider},
+    config::{AppEnv, Config, LogFormat, OtpProvider, VoiceConfig},
     error::{AppError, AppResult},
     providers::{
         google::{GoogleIdentity, GoogleVerifier},
         otp::OtpSender,
+        voice::{RelayTarget, SessionConfig, Transport, VoiceProvider, VoiceProviders, VoiceToken},
     },
+    state::Providers,
 };
 
 pub const TEST_SECRET: &str = "dev-only-test-secret-0123456789abcdef";
@@ -43,6 +45,82 @@ pub fn test_config(database_url: &str) -> Config {
         refresh_ttl_days: 30,
         google_client_ids: vec!["test-client".into()],
         otp_provider: OtpProvider::Log,
+        voice: VoiceConfig::fake(),
+    }
+}
+
+/// Voice provider for tests: records what it was asked for and can be told to fail.
+pub struct TestVoice {
+    pub name: &'static str,
+    pub fail: std::sync::atomic::AtomicBool,
+    pub last: Mutex<Option<(SessionConfig, u32)>>,
+}
+
+impl TestVoice {
+    pub fn new(name: &'static str) -> Arc<Self> {
+        Arc::new(Self {
+            name,
+            fail: false.into(),
+            last: Mutex::new(None),
+        })
+    }
+
+    pub fn set_failing(&self, fail: bool) {
+        self.fail.store(fail, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn last_prompt(&self) -> String {
+        let last = self.last.lock().unwrap();
+        last.as_ref()
+            .expect("no token minted")
+            .0
+            .system_prompt
+            .clone()
+    }
+
+    pub fn last_ttl(&self) -> u32 {
+        self.last
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("no token minted")
+            .1
+    }
+}
+
+#[async_trait]
+impl VoiceProvider for TestVoice {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn model(&self) -> &str {
+        "test-model"
+    }
+
+    async fn mint_ephemeral_token(
+        &self,
+        cfg: &SessionConfig,
+        ttl_secs: u32,
+    ) -> AppResult<VoiceToken> {
+        if self.fail.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(AppError::Unavailable);
+        }
+        *self.last.lock().unwrap() = Some((cfg.clone(), ttl_secs));
+        Ok(VoiceToken {
+            token: format!("{}-token", self.name),
+            token_expires_at: chrono::Utc::now() + chrono::Duration::seconds(60),
+            connect_url: format!("wss://{}.test/ws", self.name),
+            transport: Transport::Websocket,
+            hard_cutoff: true,
+        })
+    }
+
+    fn relay_target(&self) -> AppResult<RelayTarget> {
+        Ok(RelayTarget {
+            url: "ws://test".into(),
+            headers: vec![],
+        })
     }
 }
 
@@ -95,20 +173,39 @@ impl GoogleVerifier for FakeGoogle {
 pub struct TestApp {
     pub router: Router,
     pub otp: Arc<FakeOtp>,
+    pub voice: Arc<TestVoice>,
+    pub fallback: Option<Arc<TestVoice>>,
     pub db: PgPool,
 }
 
 pub fn build(db: PgPool) -> TestApp {
+    build_with(db, false)
+}
+
+/// `with_fallback` adds a second test provider named "backup".
+pub fn build_with(db: PgPool, with_fallback: bool) -> TestApp {
     let otp = Arc::new(FakeOtp::default());
+    let voice = TestVoice::new("primary");
+    let fallback = with_fallback.then(|| TestVoice::new("backup"));
+    let providers = VoiceProviders::new(
+        voice.clone(),
+        fallback.clone().map(|f| f as Arc<dyn VoiceProvider>),
+    );
     let state = AppState::new(
         db.clone(),
         test_config("postgres://unused"),
-        otp.clone(),
-        Arc::new(FakeGoogle),
-    );
+        Providers {
+            otp: otp.clone(),
+            google: Arc::new(FakeGoogle),
+            voice: Arc::new(providers),
+        },
+    )
+    .unwrap();
     TestApp {
         router: voclara_api::app(state),
         otp,
+        voice,
+        fallback,
         db,
     }
 }

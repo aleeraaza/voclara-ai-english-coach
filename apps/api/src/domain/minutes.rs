@@ -102,16 +102,36 @@ pub async fn debit_seconds(
         return Err(AppError::BadRequest("debit must be positive".into()));
     }
     let mut tx = db.begin().await?;
+    lock_user(&mut tx, user_id).await?;
+    let remaining = debit_locked(&mut tx, user_id, session_id, secs).await?;
+    tx.commit().await?;
+    Ok(remaining)
+}
 
-    let locked = sqlx::query("SELECT 1 FROM users WHERE id = $1 FOR UPDATE")
+/// Lock the user's row for the rest of the transaction. Everything that reads
+/// a balance and then writes based on it takes this lock first, always in the
+/// same order (user, then session), so concurrent requests cannot deadlock.
+pub async fn lock_user(conn: &mut PgConnection, user_id: Uuid) -> AppResult<()> {
+    sqlx::query("SELECT 1 FROM users WHERE id = $1 FOR UPDATE")
         .bind(user_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-    if locked.is_none() {
-        return Err(AppError::NotFound);
-    }
+        .fetch_optional(conn)
+        .await?
+        .map(|_| ())
+        .ok_or(AppError::NotFound)
+}
 
-    let current = balance(&mut *tx, user_id).await?;
+/// The debit itself. The caller must already hold [`lock_user`] in the same
+/// transaction; that lock is what makes the balance check race-free.
+pub async fn debit_locked(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    session_id: Uuid,
+    secs: i32,
+) -> AppResult<i64> {
+    if secs <= 0 {
+        return Err(AppError::BadRequest("debit must be positive".into()));
+    }
+    let current = balance(&mut *conn, user_id).await?;
     if current < i64::from(secs) {
         return Err(AppError::InsufficientMinutes);
     }
@@ -123,18 +143,15 @@ pub async fn debit_seconds(
     .bind(user_id)
     .bind(-secs)
     .bind(session_id)
-    .execute(&mut *tx)
+    .execute(conn)
     .await;
     match inserted {
-        Ok(_) => {}
+        Ok(_) => Ok(current - i64::from(secs)),
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-            return Err(AppError::Conflict("session already charged".into()));
+            Err(AppError::Conflict("session already charged".into()))
         }
-        Err(e) => return Err(e.into()),
+        Err(e) => Err(e.into()),
     }
-
-    tx.commit().await?;
-    Ok(current - i64::from(secs))
 }
 
 /// Seconds of free drill time left today, in the user's own timezone.

@@ -58,6 +58,117 @@ impl FromStr for OtpProvider {
     }
 }
 
+/// Which realtime speech-to-speech service runs live sessions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoiceProviderKind {
+    Gemini,
+    OpenAi,
+    /// Returns dummy tokens so the app can be developed without API keys.
+    Fake,
+}
+
+impl FromStr for VoiceProviderKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "gemini" => Ok(Self::Gemini),
+            "openai" => Ok(Self::OpenAi),
+            "fake" => Ok(Self::Fake),
+            other => anyhow::bail!("unknown voice provider '{other}' (gemini | openai | fake)"),
+        }
+    }
+}
+
+/// Voice provider settings. Model names always come from here, never from code.
+#[derive(Clone)]
+pub struct VoiceConfig {
+    pub primary: VoiceProviderKind,
+    pub fallback: Option<VoiceProviderKind>,
+    pub gemini_api_key: Option<String>,
+    pub gemini_live_model: Option<String>,
+    pub gemini_base_url: String,
+    pub openai_api_key: Option<String>,
+    pub openai_realtime_model: Option<String>,
+    /// Optional speech-to-text model for OpenAI input captions.
+    pub openai_transcribe_model: Option<String>,
+    pub openai_base_url: String,
+    /// Planning cost per live minute, used for session_costs until real
+    /// usage numbers are read from the provider.
+    pub usd_per_min: f64,
+}
+
+impl VoiceConfig {
+    /// A config that needs no keys: the fake provider only.
+    pub fn fake() -> Self {
+        Self {
+            primary: VoiceProviderKind::Fake,
+            fallback: None,
+            gemini_api_key: None,
+            gemini_live_model: None,
+            gemini_base_url: "https://generativelanguage.googleapis.com".into(),
+            openai_api_key: None,
+            openai_realtime_model: None,
+            openai_transcribe_model: None,
+            openai_base_url: "https://api.openai.com".into(),
+            usd_per_min: 0.03,
+        }
+    }
+
+    fn from_env() -> Result<Self> {
+        let fallback = match optional("VOICE_FALLBACK") {
+            Some(v) => Some(v.parse()?),
+            None => None,
+        };
+        Ok(Self {
+            primary: parse_or("VOICE_PROVIDER", "fake")?,
+            fallback,
+            gemini_api_key: optional("GEMINI_API_KEY"),
+            gemini_live_model: optional("GEMINI_LIVE_MODEL"),
+            gemini_base_url: parse_or(
+                "GEMINI_BASE_URL",
+                "https://generativelanguage.googleapis.com",
+            )?,
+            openai_api_key: optional("OPENAI_API_KEY"),
+            openai_realtime_model: optional("OPENAI_REALTIME_MODEL"),
+            openai_transcribe_model: optional("OPENAI_TRANSCRIBE_MODEL"),
+            openai_base_url: parse_or("OPENAI_BASE_URL", "https://api.openai.com")?,
+            usd_per_min: parse_or("VOICE_USD_PER_MIN", "0.03")?,
+        })
+    }
+
+    fn validate(&self, env: AppEnv) -> Result<()> {
+        for kind in std::iter::once(self.primary).chain(self.fallback) {
+            match kind {
+                VoiceProviderKind::Gemini => {
+                    if self.gemini_api_key.is_none() || self.gemini_live_model.is_none() {
+                        anyhow::bail!("Gemini voice needs GEMINI_API_KEY and GEMINI_LIVE_MODEL");
+                    }
+                }
+                VoiceProviderKind::OpenAi => {
+                    if self.openai_api_key.is_none() || self.openai_realtime_model.is_none() {
+                        anyhow::bail!(
+                            "OpenAI voice needs OPENAI_API_KEY and OPENAI_REALTIME_MODEL"
+                        );
+                    }
+                }
+                VoiceProviderKind::Fake => {
+                    if env == AppEnv::Production {
+                        anyhow::bail!("the fake voice provider cannot run in production");
+                    }
+                }
+            }
+        }
+        if self.fallback == Some(self.primary) {
+            anyhow::bail!("VOICE_FALLBACK must differ from VOICE_PROVIDER");
+        }
+        if !(0.0..=1.0).contains(&self.usd_per_min) {
+            anyhow::bail!("VOICE_USD_PER_MIN looks wrong (expected 0-1 USD)");
+        }
+        Ok(())
+    }
+}
+
 const DEV_SECRET_PREFIX: &str = "dev-only";
 
 /// Runtime configuration. Deliberately not `Debug`: it holds secrets.
@@ -77,6 +188,7 @@ pub struct Config {
     /// (Android, web, iOS clients each have their own).
     pub google_client_ids: Vec<String>,
     pub otp_provider: OtpProvider,
+    pub voice: VoiceConfig,
 }
 
 impl Config {
@@ -99,6 +211,7 @@ impl Config {
                 .map(str::to_owned)
                 .collect(),
             otp_provider: parse_or("OTP_PROVIDER", "log")?,
+            voice: VoiceConfig::from_env()?,
         };
         config.validate()?;
         Ok(config)
@@ -116,12 +229,21 @@ impl Config {
                 anyhow::bail!("OTP_PROVIDER=log only prints codes; configure a real provider");
             }
         }
+        self.voice.validate(self.app_env)?;
         Ok(())
     }
 }
 
 fn required(key: &str) -> Result<String> {
     env::var(key).with_context(|| format!("missing required env var {key}"))
+}
+
+/// An env var that may be absent; empty counts as absent.
+fn optional(key: &str) -> Option<String> {
+    env::var(key)
+        .ok()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
 }
 
 fn parse_or<T>(key: &str, default: &str) -> Result<T>
@@ -151,7 +273,34 @@ mod tests {
             refresh_ttl_days: 30,
             google_client_ids: vec![],
             otp_provider: OtpProvider::Log,
+            voice: VoiceConfig::fake(),
         }
+    }
+
+    #[test]
+    fn voice_providers_need_keys_and_models() {
+        let mut c = base();
+        c.voice.primary = VoiceProviderKind::Gemini;
+        assert!(c.validate().is_err(), "gemini without key/model");
+        c.voice.gemini_api_key = Some("k".into());
+        c.voice.gemini_live_model = Some("m".into());
+        assert!(c.validate().is_ok());
+
+        c.voice.fallback = Some(VoiceProviderKind::OpenAi);
+        assert!(c.validate().is_err(), "openai fallback without key/model");
+        c.voice.openai_api_key = Some("k".into());
+        c.voice.openai_realtime_model = Some("m".into());
+        assert!(c.validate().is_ok());
+
+        c.voice.fallback = Some(VoiceProviderKind::Gemini);
+        assert!(c.validate().is_err(), "fallback equal to primary");
+    }
+
+    #[test]
+    fn fake_voice_is_refused_in_production() {
+        let voice = VoiceConfig::fake();
+        assert!(voice.validate(AppEnv::Production).is_err());
+        assert!(voice.validate(AppEnv::Development).is_ok());
     }
 
     #[test]
