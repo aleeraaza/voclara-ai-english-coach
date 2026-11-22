@@ -1,9 +1,12 @@
 //! Voclara API library. `main.rs` only wires config, the database and the
 //! server; everything testable lives here.
 
+pub mod auth;
 pub mod config;
+pub mod domain;
 pub mod error;
 pub mod openapi;
+pub mod providers;
 pub mod routes;
 pub mod state;
 pub mod telemetry;

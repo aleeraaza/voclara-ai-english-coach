@@ -16,6 +16,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "streaks",
     "push_tokens",
     "jobs",
+    "otp_codes",
 ];
 
 #[tokio::test]

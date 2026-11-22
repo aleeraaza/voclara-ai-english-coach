@@ -23,6 +23,10 @@ pub enum AppError {
     Conflict(String),
     #[error("not enough minutes left")]
     InsufficientMinutes,
+    #[error("the code is wrong or has expired")]
+    InvalidCode,
+    #[error("too many attempts; try again later")]
+    TooManyRequests,
     #[error("service unavailable")]
     Unavailable,
     #[error(transparent)]
@@ -54,6 +58,8 @@ impl AppError {
             Self::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             Self::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             Self::InsufficientMinutes => (StatusCode::PAYMENT_REQUIRED, "insufficient_minutes"),
+            Self::InvalidCode => (StatusCode::BAD_REQUEST, "invalid_code"),
+            Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "rate_limited"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "unavailable"),
             Self::Database(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND, "not_found"),
             Self::Database(_) | Self::Internal(_) => {

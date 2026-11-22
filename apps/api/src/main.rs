@@ -1,9 +1,17 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
 use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
-use voclara_api::{AppState, MIGRATOR, config::Config, telemetry};
+use voclara_api::{
+    AppState, MIGRATOR,
+    config::{Config, OtpProvider},
+    providers::{
+        google::{GoogleJwksVerifier, GoogleVerifier},
+        otp::{LogOtpSender, OtpSender},
+    },
+    telemetry,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,8 +32,20 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("migrations up to date");
     }
 
+    let otp: Arc<dyn OtpSender> = match config.otp_provider {
+        OtpProvider::Log => {
+            tracing::warn!("OTP_PROVIDER=log: sign-in codes are printed to the log, not sent");
+            Arc::new(LogOtpSender)
+        }
+    };
+    if config.google_client_ids.is_empty() {
+        tracing::warn!("GOOGLE_CLIENT_IDS not set: Google sign-in will return 503");
+    }
+    let google: Arc<dyn GoogleVerifier> =
+        Arc::new(GoogleJwksVerifier::new(config.google_client_ids.clone())?);
+
     let addr = config.bind_addr;
-    let app = voclara_api::app(AppState::new(db, config));
+    let app = voclara_api::app(AppState::new(db, config, otp, google));
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("binding {addr}"))?;
