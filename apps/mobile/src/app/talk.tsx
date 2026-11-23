@@ -1,11 +1,20 @@
+/**
+ * The live session: an immersive dark canvas with the tutor's orb, captions
+ * and one big talk button. Logic (start, retry, complete) is unchanged from
+ * before the redesign; see lib/live/session.ts for the protocol.
+ */
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Animated, AppState, Linking, Pressable, ScrollView, View } from 'react-native';
+import { useAnimatedValue } from '@/components/anim';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Body, Button, Card, Chips, ErrorText, Screen, formatClock, useTheme } from '@/components/ui';
+import { Button, Gradient, Icon, IconButton, SoundWave, Txt, VoiceOrb, type OrbState } from '@/components';
 import { activeSessionId, forgetActiveSession, rememberActiveSession } from '@/lib/activeSession';
 import { api, errorCode, errorMessage, type StartedSession } from '@/lib/api/client';
 import { requestMicPermission } from '@/lib/audio/mic';
+import { formatClock } from '@/lib/format';
 import { setLastSession } from '@/lib/lastSession';
 import {
   createLiveSession,
@@ -15,6 +24,7 @@ import {
   type TalkMode,
 } from '@/lib/live/session';
 import type { Turn } from '@/lib/live/transcript';
+import { useTheme } from '@/theme';
 
 type Mode = 'talk' | 'mock' | 'interview';
 type Phase =
@@ -25,10 +35,6 @@ type Phase =
   | { kind: 'saving' };
 
 const MODE_LABEL: Record<Mode, string> = { talk: 'Talk with Sana', mock: 'IELTS-style mock', interview: 'Interview' };
-const TALK_MODES = [
-  { value: 'push', label: 'Hold to talk' },
-  { value: 'hands-free', label: 'Hands-free' },
-] as const;
 
 function startSession(mode: Mode, topic?: string) {
   return api.POST('/api/v1/sessions', { body: { mode, topic: topic ?? null } });
@@ -36,16 +42,17 @@ function startSession(mode: Mode, topic?: string) {
 
 export default function Talk() {
   const t = useTheme();
-  const params = useLocalSearchParams<{ mode?: string; topic?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; topic?: string; talkMode?: string }>();
   const mode: Mode = params.mode === 'mock' || params.mode === 'interview' ? params.mode : 'talk';
   const topic = params.topic || undefined;
+  const initialTalkMode: TalkMode = params.talkMode === 'hands-free' ? 'hands-free' : 'push';
 
   const [phase, setPhase] = useState<Phase>({ kind: 'preparing' });
   const [liveState, setLiveState] = useState<LiveState>('connecting');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [tutorSpeaking, setTutorSpeaking] = useState(false);
   const [level, setLevel] = useState(0);
-  const [talkMode, setTalkMode] = useState<TalkMode>('push');
+  const [talkMode, setTalkMode] = useState<TalkMode>(initialTalkMode);
   const [holding, setHolding] = useState(false);
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
   const [warning, setWarning] = useState(false);
@@ -53,6 +60,8 @@ export default function Talk() {
   const sessionRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<StartedSession | null>(null);
   const finishedRef = useRef(false);
+  const captions = useRef<ComponentRef<typeof ScrollView>>(null);
+  const ripple = useAnimatedValue(0);
 
   /** Upload the transcript, charge the time, then show the summary. */
   async function finalize(result: LiveResult) {
@@ -121,7 +130,7 @@ export default function Talk() {
       await rememberActiveSession(started.session_id);
 
       if (started.transport !== 'websocket') {
-        // OpenAI WebRTC fallback is not wired into the app yet.
+        // OpenAI WebRTC and relay transports are not wired into the app yet.
         await finalize({
           reason: 'error',
           transcript: [],
@@ -134,13 +143,7 @@ export default function Talk() {
 
       const endsAt = Date.parse(started.session_ends_at);
       const session = createLiveSession(
-        {
-          connectUrl: started.connect_url,
-          token: started.token,
-          model: started.model,
-          endsAt,
-          mode: talkMode,
-        },
+        { connectUrl: started.connect_url, token: started.token, model: started.model, endsAt, mode: talkMode },
         {
           onState: setLiveState,
           onTranscript: setTurns,
@@ -181,42 +184,69 @@ export default function Talk() {
     return () => sub.remove();
   }, []);
 
+  // Ripple around the talk button while held.
+  useEffect(() => {
+    if (!holding) {
+      ripple.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(Animated.timing(ripple, { toValue: 1, duration: 1100, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [holding, ripple]);
+
+  useEffect(() => {
+    captions.current?.scrollToEnd({ animated: true });
+  }, [turns]);
+
   function changeTalkMode(m: TalkMode) {
     setTalkMode(m);
     sessionRef.current?.setMode(m);
   }
 
-  if (phase.kind === 'denied') {
+  // ---------------------------------------------------------------- blocked states
+
+  if (phase.kind === 'denied' || phase.kind === 'error') {
+    const denied = phase.kind === 'denied';
     return (
-      <Screen>
-        <Card>
-          <Body>Voclara needs the microphone to hear you speak.</Body>
-          <Button title="Open settings" onPress={() => Linking.openSettings()} />
-          <Button title="Back" variant="secondary" onPress={() => router.back()} />
-        </Card>
-      </Screen>
+      <Gradient name="canvas" style={{ flex: 1 }}>
+        <StatusBar style="light" />
+        <SafeAreaView style={{ flex: 1, padding: t.space.xxl, justifyContent: 'center', gap: t.space.lg }}>
+          <View style={{ alignItems: 'center', gap: t.space.md }}>
+            <View
+              style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: t.colors.glass, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Icon name={denied ? 'mic-off' : phase.outOfMinutes ? 'hourglass' : 'cloud-offline'} size={34} color={t.colors.accent} />
+            </View>
+            <Txt variant="title" tone="onCanvas" align="center">
+              {denied ? 'Microphone needed' : phase.outOfMinutes ? 'Out of minutes' : "Couldn't start"}
+            </Txt>
+            <Txt tone="onCanvasMuted" align="center">
+              {denied
+                ? 'Voclara needs the microphone to hear you speak. You can allow it in Settings.'
+                : phase.outOfMinutes
+                  ? 'You have used your practice minutes. Plans and top-ups are coming soon.'
+                  : phase.message}
+            </Txt>
+          </View>
+          {denied && <Button title="Open settings" variant="cta" icon="settings" onPress={() => Linking.openSettings()} />}
+          <Button title="Go back" variant="secondary" onPress={() => router.back()} />
+        </SafeAreaView>
+      </Gradient>
     );
   }
 
-  if (phase.kind === 'error') {
-    return (
-      <Screen>
-        <Card>
-          <ErrorText>{phase.message}</ErrorText>
-          {phase.outOfMinutes && <Body muted>Plans and minute top-ups are coming soon.</Body>}
-          <Button title="Back" variant="secondary" onPress={() => router.back()} />
-        </Card>
-      </Screen>
-    );
-  }
+  // ---------------------------------------------------------------- live
 
+  const live = phase.kind === 'running' && liveState === 'live';
+  const orbState: OrbState = tutorSpeaking ? 'speaking' : live && (talkMode === 'hands-free' || holding) ? 'listening' : 'idle';
   const status =
     phase.kind === 'preparing'
       ? 'Getting ready…'
       : phase.kind === 'saving'
         ? 'Saving your session…'
         : liveState === 'connecting'
-          ? 'Connecting…'
+          ? 'Connecting to Sana…'
           : liveState === 'reconnecting'
             ? 'Reconnecting…'
             : tutorSpeaking
@@ -225,85 +255,184 @@ export default function Talk() {
                 ? holding
                   ? 'Listening…'
                   : 'Hold the button and speak'
-                : 'Listening…';
-
-  const live = phase.kind === 'running' && liveState === 'live';
+                : 'Listening… just talk';
 
   return (
-    <Screen scroll={false}>
-      <View style={styles.header}>
-        <Body muted>{MODE_LABEL[mode]}</Body>
-        <Text style={[styles.clock, { color: warning ? t.danger : t.text }]}>
-          {secsLeft === null ? '--:--' : formatClock(secsLeft)}
-        </Text>
-      </View>
-
-      <Card style={{ flex: 1 }}>
-        <Body muted>{status}</Body>
-        <View style={{ flex: 1, justifyContent: 'flex-end', gap: 8 }}>
-          {turns.slice(-6).map((turn, i) => (
-            <Text
-              key={`${turn.t_ms}-${i}`}
-              style={[
-                styles.caption,
-                turn.role === 'learner'
-                  ? { alignSelf: 'flex-end', backgroundColor: t.primary, color: t.primaryText }
-                  : { alignSelf: 'flex-start', backgroundColor: t.bg, color: t.text },
-              ]}
-            >
-              {turn.text}
-            </Text>
-          ))}
-        </View>
-        <View style={[styles.meterTrack, { backgroundColor: t.border }]}>
-          <View
-            style={[
-              styles.meterFill,
-              { backgroundColor: t.success, width: `${Math.min(100, Math.round(level * 400))}%` },
-            ]}
+    <Gradient name="canvas" style={{ flex: 1 }}>
+      <StatusBar style="light" />
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Top bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md, paddingHorizontal: t.space.lg, paddingTop: t.space.sm }}>
+          <IconButton
+            icon="close"
+            label="End session"
+            tone="canvas"
+            onPress={() => (phase.kind === 'running' ? void sessionRef.current?.stop() : router.back())}
           />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Txt variant="label" tone="onCanvasMuted">
+              {MODE_LABEL[mode]}
+            </Txt>
+            {topic && mode === 'talk' && (
+              <Txt variant="small" tone="onCanvas" numberOfLines={1}>
+                {topic}
+              </Txt>
+            )}
+          </View>
+          <View
+            style={{
+              minWidth: t.touch.min,
+              paddingHorizontal: t.space.md,
+              height: 36,
+              borderRadius: t.radius.pill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: warning ? t.colors.accent : t.colors.glass,
+            }}
+            accessibilityLabel={`Time left ${secsLeft === null ? 'unknown' : formatClock(secsLeft)}`}
+          >
+            <Txt variant="bodyStrong" style={{ color: warning ? t.colors.onAccent : t.colors.onCanvas, fontVariant: ['tabular-nums'] }}>
+              {secsLeft === null ? '--:--' : formatClock(secsLeft)}
+            </Txt>
+          </View>
         </View>
-      </Card>
 
-      <Chips options={TALK_MODES} value={talkMode} onChange={changeTalkMode} />
-      {talkMode === 'push' && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Hold to talk"
-          disabled={!live}
-          onPressIn={() => {
-            setHolding(true);
-            sessionRef.current?.setTalking(true);
-          }}
-          onPressOut={() => {
-            setHolding(false);
-            sessionRef.current?.setTalking(false);
-          }}
-          style={[
-            styles.ptt,
-            { backgroundColor: holding ? t.success : t.primary, opacity: live ? 1 : 0.5 },
-          ]}
+        {/* Orb */}
+        <View style={{ alignItems: 'center', marginTop: t.space.lg }}>
+          <VoiceOrb size={150} state={orbState} level={tutorSpeaking ? 0 : level} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm, marginTop: -t.space.lg }}>
+            {(orbState !== 'idle' || phase.kind !== 'running') && (
+              <SoundWave bars={4} height={14} active color={tutorSpeaking ? t.colors.accent : t.colors.onCanvas} />
+            )}
+            <Txt tone="onCanvas" accessibilityLiveRegion="polite">
+              {status}
+            </Txt>
+          </View>
+        </View>
+
+        {/* Captions */}
+        <ScrollView
+          ref={captions}
+          style={{ flex: 1, marginTop: t.space.lg }}
+          contentContainerStyle={{ paddingHorizontal: t.space.lg, gap: t.space.sm, paddingBottom: t.space.md }}
         >
-          <Text style={[styles.pttText, { color: t.primaryText }]}>{holding ? 'Listening…' : 'Hold to talk'}</Text>
-        </Pressable>
-      )}
-      <Button
-        title="End session"
-        variant="danger"
-        loading={phase.kind === 'saving'}
-        disabled={phase.kind !== 'running'}
-        onPress={() => void sessionRef.current?.stop()}
-      />
-    </Screen>
+          {turns.length === 0 && live && (
+            <Txt variant="small" tone="onCanvasMuted" align="center">
+              Captions appear here as you talk.
+            </Txt>
+          )}
+          {turns.slice(-8).map((turn, i) => {
+            const learner = turn.role === 'learner';
+            return (
+              <View
+                key={`${turn.t_ms}-${i}`}
+                style={{
+                  alignSelf: learner ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  borderRadius: t.radius.lg,
+                  borderBottomRightRadius: learner ? 4 : t.radius.lg,
+                  borderBottomLeftRadius: learner ? t.radius.lg : 4,
+                  paddingHorizontal: t.space.lg,
+                  paddingVertical: t.space.md,
+                  backgroundColor: learner ? t.colors.learnerBubble : t.colors.glass,
+                }}
+              >
+                <Txt variant="caption" tone="onCanvasMuted">
+                  {learner ? 'You' : 'Sana'}
+                </Txt>
+                <Txt tone="onCanvas">{turn.text}</Txt>
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        {/* Controls */}
+        <View style={{ padding: t.space.lg, gap: t.space.lg, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', padding: t.space.xs, borderRadius: t.radius.pill, backgroundColor: t.colors.glass }}>
+            {(['push', 'hands-free'] as const).map((m) => {
+              const on = talkMode === m;
+              return (
+                <Pressable
+                  key={m}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  onPress={() => changeTalkMode(m)}
+                  style={{
+                    paddingHorizontal: t.space.lg,
+                    minHeight: 40,
+                    justifyContent: 'center',
+                    borderRadius: t.radius.pill,
+                    backgroundColor: on ? t.colors.glassStrong : 'transparent',
+                  }}
+                >
+                  <Txt variant="small" tone={on ? 'onCanvas' : 'onCanvasMuted'} style={{ fontFamily: t.fonts.semibold }}>
+                    {m === 'push' ? 'Hold to talk' : 'Hands-free'}
+                  </Txt>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {talkMode === 'push' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hold to talk"
+              disabled={!live}
+              onPressIn={() => {
+                setHolding(true);
+                sessionRef.current?.setTalking(true);
+              }}
+              onPressOut={() => {
+                setHolding(false);
+                sessionRef.current?.setTalking(false);
+              }}
+              style={{ alignItems: 'center', justifyContent: 'center', opacity: live ? 1 : 0.45 }}
+            >
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: 104,
+                  height: 104,
+                  borderRadius: 52,
+                  borderWidth: 3,
+                  borderColor: t.colors.accent,
+                  opacity: ripple.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+                  transform: [{ scale: ripple.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] }) }],
+                }}
+              />
+              <View
+                style={{
+                  width: 104,
+                  height: 104,
+                  borderRadius: 52,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundImage: holding ? t.gradients.sunrise : t.gradients.talk,
+                  boxShadow: holding ? t.shadows.glow : t.shadows.raised,
+                }}
+              >
+                <Icon name={holding ? 'mic' : 'mic-outline'} size={44} color={t.colors.onBrand} />
+              </View>
+            </Pressable>
+          ) : (
+            <Button
+              title="End session"
+              variant="secondary"
+              icon="stop-circle"
+              loading={phase.kind === 'saving'}
+              disabled={phase.kind !== 'running'}
+              onPress={() => void sessionRef.current?.stop()}
+              style={{ alignSelf: 'stretch' }}
+            />
+          )}
+          {talkMode === 'push' && (
+            <Txt variant="caption" tone="onCanvasMuted">
+              Tap ✕ to finish and get your feedback
+            </Txt>
+          )}
+        </View>
+      </SafeAreaView>
+    </Gradient>
   );
 }
 
-const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  clock: { fontSize: 28, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  caption: { maxWidth: '85%', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, fontSize: 16, overflow: 'hidden' },
-  meterTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  meterFill: { height: 6 },
-  ptt: { height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
-  pttText: { fontSize: 18, fontWeight: '700' },
-});

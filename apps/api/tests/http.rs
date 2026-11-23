@@ -111,6 +111,40 @@ async fn malformed_json_gets_our_error_format() {
 }
 
 #[tokio::test]
+async fn cors_allows_only_configured_origins() {
+    use axum::{body::Body, http::Request};
+    use tower::ServiceExt;
+    let app = common::build_without_db();
+    let preflight = |origin: &'static str| {
+        Request::builder()
+            .method("OPTIONS")
+            .uri("/api/v1/me")
+            .header("origin", origin)
+            .header("access-control-request-method", "GET")
+            .header("access-control-request-headers", "authorization")
+            .body(Body::empty())
+            .unwrap()
+    };
+    let ok = app
+        .router
+        .clone()
+        .oneshot(preflight("http://localhost:8081"))
+        .await
+        .unwrap();
+    assert_eq!(
+        ok.headers()["access-control-allow-origin"],
+        "http://localhost:8081"
+    );
+    let bad = app
+        .router
+        .clone()
+        .oneshot(preflight("https://evil.example"))
+        .await
+        .unwrap();
+    assert!(bad.headers().get("access-control-allow-origin").is_none());
+}
+
+#[tokio::test]
 async fn invalid_google_token_is_401() {
     let app = common::build_without_db();
     let (status, _) = app

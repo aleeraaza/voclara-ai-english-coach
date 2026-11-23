@@ -4,7 +4,7 @@
  * API shows up here as a type error.
  */
 import createClient from 'openapi-fetch';
-import * as SecureStore from 'expo-secure-store';
+import { kvDelete, kvGet, kvSet } from '../kv';
 import type { components, paths } from '@api-types';
 
 import { RefreshRejected, TokenManager, type TokenPair, type TokenStorage } from './tokens';
@@ -25,7 +25,7 @@ const STORAGE_KEY = 'voclara.tokens.v1';
 
 const secureStorage: TokenStorage = {
   async load() {
-    const raw = await SecureStore.getItemAsync(STORAGE_KEY);
+    const raw = await kvGet(STORAGE_KEY);
     if (!raw) return null;
     try {
       return JSON.parse(raw) as TokenPair;
@@ -34,10 +34,10 @@ const secureStorage: TokenStorage = {
     }
   },
   async save(pair) {
-    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(pair));
+    await kvSet(STORAGE_KEY, JSON.stringify(pair));
   },
   async clear() {
-    await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await kvDelete(STORAGE_KEY);
   },
 };
 

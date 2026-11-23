@@ -52,6 +52,7 @@ pub fn test_config(database_url: &str) -> Config {
         otp_provider: OtpProvider::Log,
         voice: VoiceConfig::fake(),
         grader: GraderConfig::fake(),
+        cors_origins: vec!["http://localhost:8081".into()],
     }
 }
 

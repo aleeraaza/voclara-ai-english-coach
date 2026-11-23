@@ -275,6 +275,8 @@ pub struct Config {
     pub otp_provider: OtpProvider,
     pub voice: VoiceConfig,
     pub grader: GraderConfig,
+    /// Browser origins allowed to call the API (the web app; Expo web in dev).
+    pub cors_origins: Vec<String>,
 }
 
 impl Config {
@@ -299,6 +301,13 @@ impl Config {
             otp_provider: parse_or("OTP_PROVIDER", "log")?,
             voice: VoiceConfig::from_env()?,
             grader: GraderConfig::from_env()?,
+            cors_origins: env::var("CORS_ORIGINS")
+                .unwrap_or_else(|_| "http://localhost:8081,http://127.0.0.1:8081".to_owned())
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect(),
         };
         config.validate()?;
         Ok(config)
@@ -318,6 +327,14 @@ impl Config {
         }
         self.voice.validate(self.app_env)?;
         self.grader.validate(self.app_env, &self.voice)?;
+        for origin in &self.cors_origins {
+            if origin == "*" {
+                anyhow::bail!("CORS_ORIGINS must list origins explicitly, not '*'");
+            }
+            if axum::http::HeaderValue::from_str(origin).is_err() || !origin.starts_with("http") {
+                anyhow::bail!("invalid CORS origin '{origin}'");
+            }
+        }
         Ok(())
     }
 }
@@ -363,6 +380,7 @@ mod tests {
             otp_provider: OtpProvider::Log,
             voice: VoiceConfig::fake(),
             grader: GraderConfig::fake(),
+            cors_origins: vec![],
         }
     }
 

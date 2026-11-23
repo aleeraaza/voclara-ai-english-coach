@@ -42,6 +42,10 @@ layer (landing, quiz funnel, checkout, account, SEO). One Rust API for both.
 - After any API change: `cargo run -p voclara-api --bin export_openapi`, then in
   apps/mobile `npm run gen:api`; CI fails if either file is stale.
 - Mobile checks: `npm run typecheck && npm test && npx expo lint` in apps/mobile.
+- Mobile UI follows apps/mobile/DESIGN.md: every colour, gradient, space, radius, font
+  and duration comes from `useTheme()` (src/theme/tokens.ts is the only place raw values
+  live); build screens from src/components; one marigold `cta` per screen; keep
+  src/theme/theme.test.ts (AA contrast) passing when adding colour pairs.
 - Request bodies use `AppJson<T>` (not `axum::Json`) so bad JSON gets our error format.
 - Relay mode (src/relay.rs): the server always sends its own setup/prompt upstream;
   never forward a client setup. No unbounded queues: await sends in the select loop.

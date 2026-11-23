@@ -2,11 +2,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { api, publicApi, toPair, tokens, type Me, type Schemas } from './api/client';
+import { hasOnboarded, markOnboarded } from './onboarding';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
 
 interface AuthValue {
   status: Status;
+  /** null while loading. */
+  onboarded: boolean | null;
+  finishOnboarding: () => Promise<void>;
   me: Me | null;
   /** Reload the profile (minutes, plan, settings) from the API. */
   refreshMe: () => Promise<Me | null>;
@@ -18,7 +22,19 @@ const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    hasOnboarded()
+      .then(setOnboarded)
+      .catch(() => setOnboarded(true));
+  }, []);
+
+  const finishOnboarding = useCallback(async () => {
+    setOnboarded(true);
+    await markOnboarded().catch(() => null);
+  }, []);
 
   const refreshMe = useCallback(async () => {
     const { data } = await api.GET('/api/v1/me');
@@ -59,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, me, refreshMe, signInWith, signOut }),
-    [status, me, refreshMe, signInWith, signOut],
+    () => ({ status, onboarded, finishOnboarding, me, refreshMe, signInWith, signOut }),
+    [status, onboarded, finishOnboarding, me, refreshMe, signInWith, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -69,4 +85,9 @@ export function useAuth(): AuthValue {
   const v = useContext(AuthContext);
   if (!v) throw new Error('useAuth must be used inside AuthProvider');
   return v;
+}
+
+export function useOnboarding() {
+  const { onboarded, finishOnboarding } = useAuth();
+  return { onboarded, finishOnboarding };
 }

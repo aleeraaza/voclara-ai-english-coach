@@ -1,6 +1,6 @@
 # Voclara — development handoff
 
-_Last updated: 22 Nov 2026. Written for continuing work in Cursor._
+_Last updated: 23 Nov 2026. Written for continuing work in Cursor._
 
 Voclara is an Urdu-first AI English speaking coach (IELTS-style mocks, job
 interviews, daily talk) for South Asian learners. The plan, market notes and
@@ -22,13 +22,14 @@ and Cursor loads them through `.cursor/rules/voclara.mdc`.
 | Prompt 4b | Next.js web layer | ⬜ Not started |
 | Prompt 5 | Relay mode WebSocket | ✅ Done (API side; the mobile app still uses direct mode) |
 | Prompt 6a | Grading from the transcript: jobs worker, grader LLM, feedback + progress, app screens | ✅ Done |
+| UI redesign | "Indus & Marigold" design system (`apps/mobile/DESIGN.md`, `src/theme`), tabs, onboarding, animated splash, practice setup screens; API CORS for the web preview | ✅ Done |
 | Prompt 6b | Pronunciation: clip upload (R2) + Azure Pronunciation Assessment | ⬜ Next |
 | Prompt 7 | IELTS mock flow (Parts 1-3, result page, share card) | ⬜ Not started (examiner prompt exists) |
 | Prompt 8 | Billing (Play Billing, Safepay, Paddle/Lemon Squeezy) | ⬜ Not started (tables exist) |
 | Week 7 | Streaks, push, placement test | ⬜ Not started (tables exist) |
 | Week 9 | Store listing, privacy policy, launch | ⬜ Not started |
 
-**Tests:** API 129 passing (`cargo test` against Postgres), mobile 47 passing
+**Tests:** API 130 passing (`cargo test` against Postgres), mobile 71 passing
 (`npm test`). Clippy, `tsc`, `expo lint` and `expo-doctor` are all clean. The
 relay load test ran 200 concurrent sessions × 10 round trips in 1.4 s
 (`RELAY_LOAD_SESSIONS=200 cargo test --test relay many_concurrent`; default 50).

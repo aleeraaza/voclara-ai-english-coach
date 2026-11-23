@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-dev",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:Path = \"$env:USERPROFILE\\.cargo\\bin;C:\\msys64\\mingw64\\bin;$env:Path\"; $env:BIND_ADDR='127.0.0.1:8090'; $env:VOICE_PROVIDER='fake'; $env:GRADER_PROVIDER='fake'; $env:CORS_ORIGINS='http://localhost:8091'; cargo run -q -p voclara-api"
+      ],
+      "port": 8090,
+      "autoPort": false
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "Set-Location apps/mobile; $env:EXPO_PUBLIC_API_URL='http://localhost:8090'; npx.cmd expo start --web --port 8091"
+      ],
+      "port": 8091,
+      "autoPort": false
+    }
+  ]
+}

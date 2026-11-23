@@ -20,6 +20,7 @@ use axum::{
     routing::get,
 };
 use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
 };
@@ -31,8 +32,30 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 const REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 
+/// Browsers may call the API only from the configured origins (the web app).
+/// Native apps send no Origin header, so CORS does not affect them.
+fn cors(origins: &[String]) -> CorsLayer {
+    use axum::http::{HeaderValue, Method, header};
+    let origins: Vec<HeaderValue> = origins
+        .iter()
+        .filter_map(|o| HeaderValue::from_str(o).ok())
+        .collect();
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+        .max_age(std::time::Duration::from_secs(3600))
+}
+
 /// Build the full HTTP application.
 pub fn app(state: AppState) -> Router {
+    let cors = cors(&state.config.cors_origins);
     Router::new()
         .merge(routes::health::router())
         .route("/openapi.json", get(openapi::spec))
@@ -47,5 +70,6 @@ pub fn app(state: AppState) -> Router {
             }),
         )
         .layer(SetRequestIdLayer::new(REQUEST_ID, MakeRequestUuid))
+        .layer(cors)
         .with_state(state)
 }
