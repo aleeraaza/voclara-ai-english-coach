@@ -362,12 +362,33 @@ pub fn build_without_db() -> TestApp {
     build(db)
 }
 
-/// Real database from `DATABASE_URL`, migrated. `None` (test skips) if unset.
-pub async fn test_db() -> Option<PgPool> {
-    let Ok(url) = std::env::var("DATABASE_URL") else {
-        eprintln!("DATABASE_URL not set; skipping database test");
+/// URL of the test database from `TEST_DATABASE_URL`, or `None` (the test
+/// skips) when unset. Tests never read `DATABASE_URL`, so a dev database in the
+/// environment or `.env` is never touched.
+///
+/// Panics unless the database name ends in `_test`: tests insert users and
+/// sessions and drain the job queue, which must not happen to real data.
+pub fn test_database_url() -> Option<String> {
+    let Ok(url) = std::env::var("TEST_DATABASE_URL") else {
+        eprintln!("TEST_DATABASE_URL not set; skipping database test");
         return None;
     };
+    let name = url
+        .split(['?', '#'])
+        .next()
+        .and_then(|base| base.rsplit('/').next())
+        .unwrap_or_default();
+    assert!(
+        name.ends_with("_test"),
+        "TEST_DATABASE_URL must name a database ending in `_test` (got `{name}`); \
+         tests write rows and must never run against dev or production data"
+    );
+    Some(url)
+}
+
+/// Real test database (see [`test_database_url`]), migrated. `None` if unset.
+pub async fn test_db() -> Option<PgPool> {
+    let url = test_database_url()?;
     let db = PgPoolOptions::new()
         .max_connections(20)
         .connect(&url)

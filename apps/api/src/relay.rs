@@ -26,7 +26,7 @@
 use std::time::Duration;
 
 use axum::extract::ws::{Message as ClientMessage, WebSocket};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use serde::{Deserialize, Serialize};
 use tokio::time::{Instant, sleep, sleep_until, timeout};
 use tokio_tungstenite::tungstenite::{
@@ -226,7 +226,29 @@ async fn send_client(
     }
 }
 
-/// Run one relay session until it ends; never panics, always closes both sides.
+/// The app's side of a finished relay, after our `ended` message and Close
+/// frame went out. Call [`Closing::finish`] once the session is stored.
+pub struct Closing(SplitStream<WebSocket>);
+
+impl Closing {
+    /// Finish the WebSocket closing handshake: read and drop whatever the app
+    /// still sends until it answers with Close (or `limit` passes). Dropping a
+    /// socket with unread data makes some TCP stacks (Windows) reset the
+    /// connection, and the app can then lose the `ended` message it has not read.
+    pub async fn finish(mut self, limit: Duration) {
+        let _ = timeout(limit, async {
+            while let Some(Ok(msg)) = self.0.next().await {
+                if matches!(msg, ClientMessage::Close(_)) {
+                    break;
+                }
+            }
+        })
+        .await;
+    }
+}
+
+/// Run one relay session until it ends; never panics, always sends `ended`
+/// and Close to the app. The caller drains the app's side with [`Closing`].
 pub async fn run(
     client: WebSocket,
     target: RelayTarget,
@@ -234,7 +256,7 @@ pub async fn run(
     cfg: SessionConfig,
     deadline: Instant,
     limits: RelayLimits,
-) -> RelayOutcome {
+) -> (RelayOutcome, Closing) {
     let started = Instant::now();
     let (mut client_tx, mut client_rx) = client.split();
     let mut transcript = TranscriptBuilder::default();
@@ -252,13 +274,14 @@ pub async fn run(
                 limits.send_timeout,
             )
             .await;
-            let _ = client_tx.close().await;
-            return RelayOutcome {
+            let _ = timeout(limits.send_timeout, client_tx.close()).await;
+            let outcome = RelayOutcome {
                 reason: EndReason::ProviderUnavailable,
                 transcript: vec![],
                 audio_in_secs,
                 audio_out_secs,
             };
+            return (outcome, Closing(client_rx));
         }
     };
     let (mut up_tx, mut up_rx) = upstream.split();
@@ -379,12 +402,13 @@ pub async fn run(
     let _ = timeout(limits.send_timeout, client_tx.close()).await;
     let _ = timeout(limits.send_timeout, up_tx.close()).await;
 
-    RelayOutcome {
+    let outcome = RelayOutcome {
         reason,
         transcript: transcript.into_turns(),
         audio_in_secs,
         audio_out_secs,
-    }
+    };
+    (outcome, Closing(client_rx))
 }
 
 type Upstream =

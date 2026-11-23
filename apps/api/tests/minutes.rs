@@ -1,4 +1,4 @@
-//! Minute wallet against a real Postgres (skipped when DATABASE_URL is unset).
+//! Minute wallet against a real Postgres (skipped when TEST_DATABASE_URL is unset).
 #![allow(clippy::unwrap_used)]
 
 mod common;

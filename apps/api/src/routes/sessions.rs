@@ -339,8 +339,12 @@ pub async fn relay_socket(
         .max_message_size(relay::MAX_CLIENT_MESSAGE)
         .max_frame_size(relay::MAX_CLIENT_MESSAGE)
         .on_upgrade(move |socket| async move {
-            let outcome = relay::run(socket, target, codec, cfg, deadline, limits).await;
+            let linger = limits.send_timeout;
+            let (outcome, closing) = relay::run(socket, target, codec, cfg, deadline, limits).await;
+            // Store and charge first, then finish the close handshake, so a
+            // slow app never delays billing.
             finish_relay(&state, id, user_id, outcome).await;
+            closing.finish(linger).await;
         }))
 }
 

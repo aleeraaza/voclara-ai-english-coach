@@ -96,7 +96,7 @@ Install the APK it produces on the emulator or phone, then run `npx expo start -
 docker compose up -d db
 Copy-Item .env.example .env          # first time only
 cargo run -p voclara-api             # http://127.0.0.1:8080
-$env:DATABASE_URL="postgres://voclara:voclara@localhost:5433/voclara"; cargo test
+$env:TEST_DATABASE_URL="postgres://voclara:voclara@localhost:5433/voclara_test"; cargo test
 cargo fmt --all; cargo clippy --all-targets -- -D warnings
 
 # After changing the API: refresh the spec and TypeScript types (CI checks both)

@@ -9,6 +9,7 @@ services:
       - "5433:5432"   # host 5433: 5432 is used by other local Postgres instances
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro   # creates voclara_test
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U voclara -d voclara"]
       interval: 2s

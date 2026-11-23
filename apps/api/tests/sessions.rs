@@ -1,4 +1,4 @@
-//! Live session start/complete against a real Postgres (skipped without DATABASE_URL).
+//! Live session start/complete against a real Postgres (skipped without TEST_DATABASE_URL).
 #![allow(clippy::unwrap_used)]
 
 mod common;

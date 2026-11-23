@@ -1,5 +1,7 @@
-//! Runs the migrations against a real Postgres when `DATABASE_URL` is set
+//! Runs the migrations against a real Postgres when `TEST_DATABASE_URL` is set
 //! (CI always sets it). Skips quietly otherwise so `cargo test` works offline.
+
+mod common;
 
 use sqlx::{PgPool, Row};
 
@@ -21,8 +23,7 @@ const EXPECTED_TABLES: &[&str] = &[
 
 #[tokio::test]
 async fn migrations_create_all_tables() {
-    let Ok(url) = std::env::var("DATABASE_URL") else {
-        eprintln!("DATABASE_URL not set; skipping migration test");
+    let Some(url) = common::test_database_url() else {
         return;
     };
     let db = PgPool::connect(&url).await.unwrap();

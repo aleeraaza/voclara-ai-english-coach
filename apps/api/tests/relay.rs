@@ -1,6 +1,6 @@
 //! Relay mode end to end: a real API server, a real WebSocket client, and a
 //! fake upstream provider speaking the passthrough protocol. Needs Postgres
-//! (skipped when DATABASE_URL is unset).
+//! (skipped when TEST_DATABASE_URL is unset).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;

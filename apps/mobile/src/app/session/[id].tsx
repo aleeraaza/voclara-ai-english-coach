@@ -5,10 +5,10 @@ import { FeedbackView, useFeedback } from '@/components/FeedbackView';
 
 export default function SessionFeedback() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { fb, error } = useFeedback(id ?? null);
+  const { fb, error, retry } = useFeedback(id ?? null);
   return (
     <Screen>
-      <FeedbackView fb={fb} error={error} />
+      <FeedbackView fb={fb} error={error} onRetry={retry} />
     </Screen>
   );
 }

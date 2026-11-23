@@ -32,7 +32,7 @@ code from the server log (`OTP_PROVIDER=log` prints it), then
 `POST /api/v1/auth/otp/verify {"phone":..., "code":...}` and call
 `GET /api/v1/me` with `Authorization: Bearer <access_token>`.
 
-Run database tests with `DATABASE_URL=postgres://voclara:voclara@localhost:5433/voclara cargo test`
+Run database tests with `TEST_DATABASE_URL=postgres://voclara:voclara@localhost:5433/voclara_test cargo test`
 (without it, database tests skip themselves).
 
 Clients must never call `/auth/refresh` twice in parallel with the same token:

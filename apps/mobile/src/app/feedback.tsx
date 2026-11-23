@@ -17,7 +17,7 @@ const REASON: Record<string, string> = {
 export default function AfterSession() {
   const t = useTheme();
   const s = getLastSession();
-  const { fb, error } = useFeedback(s?.sessionId ?? null, s?.secondsCharged !== null);
+  const { fb, error, retry } = useFeedback(s?.sessionId ?? null, s?.secondsCharged !== null);
 
   if (!s) {
     return (
@@ -53,7 +53,7 @@ export default function AfterSession() {
       <Notice>{s.liveError}</Notice>
       <Notice>{s.uploadError}</Notice>
 
-      {s.secondsCharged !== null && <FeedbackView fb={fb} error={error} />}
+      {s.secondsCharged !== null && <FeedbackView fb={fb} error={error} onRetry={retry} />}
 
       {learnerTurns.length > 0 && (
         <>

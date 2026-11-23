@@ -55,6 +55,8 @@ layer (landing, quiz funnel, checkout, account, SEO). One Rust API for both.
   wpm are computed in domain/metrics.rs. Background work goes through the jobs
   table (src/worker.rs), never ad-hoc tokio::spawn from handlers.
 - Tests in one file that drain the job queue must serialise (see tests/grading.rs).
+- Integration tests use TEST_DATABASE_URL (a database whose name ends in _test,
+  e.g. voclara_test on localhost:5433), never DATABASE_URL or the dev data.
 
 ## Local dev
 - `docker compose up -d db` starts Postgres 16 on localhost:5433 (5432 is taken by other local Postgres).

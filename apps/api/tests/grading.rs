@@ -1,4 +1,4 @@
-//! Grading pipeline against a real Postgres (skipped without DATABASE_URL):
+//! Grading pipeline against a real Postgres (skipped without TEST_DATABASE_URL):
 //! complete -> grade_session job -> scores -> feedback / progress.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

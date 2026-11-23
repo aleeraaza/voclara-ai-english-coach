@@ -11,8 +11,8 @@ import { languageLabel } from '@/lib/labels';
 import { pollUntil } from '@/lib/poll';
 import { useTheme } from '@/theme';
 
-import { Card, Icon, Txt } from './core';
-import { BandBadge, EmptyState, Notice, ProgressBar, SectionTitle } from './widgets';
+import { Button, Card, Icon, Txt } from './core';
+import { BandBadge, EmptyState, ProgressBar, SectionTitle } from './widgets';
 
 const CRITERIA = [
   { key: 'fluency', label: 'Fluency & coherence', icon: 'pulse' },
@@ -28,39 +28,81 @@ function headline(band: number): string {
   return 'Every session makes you stronger.';
 }
 
+/** The API answered, but not with feedback (e.g. 404): polling again won't help. */
+class NoFeedback extends Error {}
+
 export function useFeedback(sessionId: string | null, enabled = true) {
   const [fb, setFb] = useState<Feedback | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!sessionId || !enabled) return;
     let cancelled = false;
     pollUntil(
       async () => {
-        const { data } = await api.GET('/api/v1/sessions/{id}/feedback', { params: { path: { id: sessionId } } });
-        return data ?? null;
+        const { data, response } = await api.GET('/api/v1/sessions/{id}/feedback', {
+          params: { path: { id: sessionId } },
+        });
+        if (!data) throw new NoFeedback(`feedback request failed (${response.status})`);
+        return data;
       },
       {
-        done: (v) => v !== null && v.status !== 'pending',
+        done: (v) => v.status !== 'pending',
         onValue: (v) => {
-          if (!cancelled && v) setFb(v);
+          if (!cancelled) setFb(v);
         },
         cancelled: () => cancelled,
       },
-    ).catch(() => {
-      if (!cancelled) setError('Could not load feedback. Check your connection.');
-    });
+    )
+      .then((last) => {
+        // pollUntil also returns when it times out; a still-pending result
+        // means grading is stuck, so stop the spinner and offer a retry.
+        if (!cancelled && last.status === 'pending') {
+          setError('Your review is taking longer than usual. Try again in a minute.');
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(
+          e instanceof NoFeedback
+            ? 'Feedback is not available for this session.'
+            : 'Could not load feedback. Check your connection.',
+        );
+      });
     return () => {
       cancelled = true;
     };
-  }, [enabled, sessionId]);
-  return { fb, error };
+  }, [enabled, sessionId, attempt]);
+  return {
+    fb,
+    error,
+    retry: () => {
+      setError(null);
+      setAttempt((n) => n + 1);
+    },
+  };
 }
 
-export function FeedbackView({ fb, error }: { fb: Feedback | null; error: string | null }) {
+export function FeedbackView({
+  fb,
+  error,
+  onRetry,
+}: {
+  fb: Feedback | null;
+  error: string | null;
+  onRetry?: () => void;
+}) {
   const t = useTheme();
   const [openWhy, setOpenWhy] = useState<Record<number, boolean>>({});
 
-  if (error) return <Notice>{error}</Notice>;
+  if (error) {
+    return (
+      <Card>
+        <EmptyState icon="cloud-offline" title="Feedback unavailable" body={error} />
+        {onRetry ? <Button title="Try again" variant="secondary" icon="refresh" onPress={onRetry} /> : null}
+      </Card>
+    );
+  }
 
   if (!fb || fb.status === 'pending') {
     return (
