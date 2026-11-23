@@ -11,8 +11,9 @@ import { useAnimatedValue } from '@/components/anim';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Gradient, Icon, IconButton, SoundWave, Txt, VoiceOrb, type OrbState } from '@/components';
+import { MockStage } from '@/components/MockStage';
 import { activeSessionId, forgetActiveSession, rememberActiveSession } from '@/lib/activeSession';
-import { api, errorCode, errorMessage, type StartedSession } from '@/lib/api/client';
+import { api, errorCode, errorMessage, type CueCard, type StartedSession } from '@/lib/api/client';
 import { requestMicPermission } from '@/lib/audio/mic';
 import { formatClock } from '@/lib/format';
 import { setLastSession } from '@/lib/lastSession';
@@ -24,6 +25,7 @@ import {
   type TalkMode,
 } from '@/lib/live/session';
 import type { Turn } from '@/lib/live/transcript';
+import { mockProgress } from '@/lib/mock';
 import { useTheme } from '@/theme';
 
 type Mode = 'talk' | 'mock' | 'interview';
@@ -56,6 +58,7 @@ export default function Talk() {
   const [holding, setHolding] = useState(false);
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
   const [warning, setWarning] = useState(false);
+  const [cueCard, setCueCard] = useState<CueCard | null>(null);
 
   const sessionRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<StartedSession | null>(null);
@@ -127,6 +130,7 @@ export default function Talk() {
 
       const started = res.data;
       startedRef.current = started;
+      setCueCard(started.cue_card ?? null);
       await rememberActiveSession(started.session_id);
 
       if (started.transport !== 'websocket') {
@@ -239,6 +243,9 @@ export default function Talk() {
   // ---------------------------------------------------------------- live
 
   const live = phase.kind === 'running' && liveState === 'live';
+  const isMock = mode === 'mock';
+  const mock = isMock ? mockProgress(turns) : null;
+  const partner = isMock ? 'The examiner' : 'Sana';
   const orbState: OrbState = tutorSpeaking ? 'speaking' : live && (talkMode === 'hands-free' || holding) ? 'listening' : 'idle';
   const status =
     phase.kind === 'preparing'
@@ -246,11 +253,13 @@ export default function Talk() {
       : phase.kind === 'saving'
         ? 'Saving your session…'
         : liveState === 'connecting'
-          ? 'Connecting to Sana…'
+          ? isMock
+            ? 'Connecting to your examiner…'
+            : 'Connecting to Sana…'
           : liveState === 'reconnecting'
             ? 'Reconnecting…'
             : tutorSpeaking
-              ? 'Sana is speaking'
+              ? `${partner} is speaking`
               : talkMode === 'push'
                 ? holding
                   ? 'Listening…'
@@ -278,6 +287,11 @@ export default function Talk() {
                 {topic}
               </Txt>
             )}
+            {isMock && cueCard && (
+              <Txt variant="small" tone="onCanvas" numberOfLines={1}>
+                {cueCard.topic}
+              </Txt>
+            )}
           </View>
           <View
             style={{
@@ -298,8 +312,8 @@ export default function Talk() {
         </View>
 
         {/* Orb */}
-        <View style={{ alignItems: 'center', marginTop: t.space.lg }}>
-          <VoiceOrb size={150} state={orbState} level={tutorSpeaking ? 0 : level} />
+        <View style={{ alignItems: 'center', marginTop: isMock ? t.space.sm : t.space.lg }}>
+          <VoiceOrb size={isMock ? (mock?.part === 2 ? 84 : 110) : 150} state={orbState} level={tutorSpeaking ? 0 : level} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm, marginTop: -t.space.lg }}>
             {(orbState !== 'idle' || phase.kind !== 'running') && (
               <SoundWave bars={4} height={14} active color={tutorSpeaking ? t.colors.accent : t.colors.onCanvas} />
@@ -309,6 +323,12 @@ export default function Talk() {
             </Txt>
           </View>
         </View>
+
+        {mock && (
+          <View style={{ marginTop: t.space.md }}>
+            <MockStage card={cueCard} progress={mock} />
+          </View>
+        )}
 
         {/* Captions */}
         <ScrollView
@@ -338,7 +358,7 @@ export default function Talk() {
                 }}
               >
                 <Txt variant="caption" tone="onCanvasMuted">
-                  {learner ? 'You' : 'Sana'}
+                  {learner ? 'You' : isMock ? 'Examiner' : 'Sana'}
                 </Txt>
                 <Txt tone="onCanvas">{turn.text}</Txt>
               </View>
@@ -348,6 +368,16 @@ export default function Talk() {
 
         {/* Controls */}
         <View style={{ padding: t.space.lg, gap: t.space.lg, alignItems: 'center' }}>
+          {mock?.ended && phase.kind === 'running' && (
+            <Button
+              title="Get my band"
+              variant="cta"
+              size="lg"
+              icon="ribbon"
+              onPress={() => void sessionRef.current?.stop()}
+              style={{ alignSelf: 'stretch' }}
+            />
+          )}
           <View style={{ flexDirection: 'row', padding: t.space.xs, borderRadius: t.radius.pill, backgroundColor: t.colors.glass }}>
             {(['push', 'hands-free'] as const).map((m) => {
               const on = talkMode === m;

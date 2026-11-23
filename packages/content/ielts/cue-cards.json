@@ -1,34 +1,629 @@
 [
   {
     "id": "describe-a-teacher",
-    "topic": "People",
-    "prompt": "Describe a teacher who has influenced you.",
-    "bullets": [
-      "who this teacher was",
-      "what subject they taught",
-      "what they were like",
-      "and explain why they influenced you"
+    "topic": "Education",
+    "part1": [
+      "Are you working or studying at the moment?",
+      "What do you enjoy most about your studies or your job?",
+      "Did you like going to school as a child? Why or why not?",
+      "Which subject did you find most difficult at school?"
     ],
+    "prompt": "Describe a teacher who has influenced you.",
+    "bullets": ["who this teacher was", "what subject they taught", "what they were like", "and explain why they influenced you"],
+    "rounding_off": ["Are you still in touch with this teacher?"],
     "part3": [
       "What makes a good teacher?",
       "Do you think online teaching can replace classroom teaching?",
-      "How has the role of teachers changed in your country?"
+      "How has the role of teachers changed in your country?",
+      "Should teachers be paid more than they are now? Why?"
     ]
   },
   {
     "id": "describe-a-journey",
     "topic": "Travel",
-    "prompt": "Describe a memorable journey you have made.",
-    "bullets": [
-      "where you went",
-      "how you travelled",
-      "who you went with",
-      "and explain why it was memorable"
+    "part1": [
+      "Do you like travelling? Why or why not?",
+      "How do you usually travel to work or college?",
+      "Have you ever travelled by train? What was it like?",
+      "Where would you like to travel in the future?"
     ],
+    "prompt": "Describe a memorable journey you have made.",
+    "bullets": ["where you went", "how you travelled", "who you went with", "and explain why it was memorable"],
+    "rounding_off": ["Would you like to make the same journey again?"],
     "part3": [
       "Why do people enjoy travelling?",
       "How has transport changed in cities over the last twenty years?",
-      "Should governments spend more on public transport than on roads?"
+      "Should governments spend more on public transport than on roads?",
+      "Is it better to travel alone or with other people?"
+    ]
+  },
+  {
+    "id": "describe-a-festival",
+    "topic": "Culture",
+    "part1": [
+      "What is your favourite festival?",
+      "How do people in your area usually celebrate holidays?",
+      "Do you prefer celebrating with family or with friends?",
+      "Have festivals changed since you were a child?"
+    ],
+    "prompt": "Describe a festival or celebration that is important in your country.",
+    "bullets": ["what the festival is", "when it takes place", "what people do during it", "and explain why it is important"],
+    "rounding_off": ["Did you celebrate it this year?"],
+    "part3": [
+      "Why are traditional festivals important to a society?",
+      "Do you think festivals have become too commercial?",
+      "How do young people and older people celebrate differently?",
+      "Should schools teach children about festivals from other cultures?"
+    ]
+  },
+  {
+    "id": "describe-a-useful-app",
+    "topic": "Technology",
+    "part1": [
+      "How often do you use your mobile phone?",
+      "What do you mostly use the internet for?",
+      "Did you use computers much when you were younger?",
+      "Is there any technology you could not live without?"
+    ],
+    "prompt": "Describe an app or website that you find very useful.",
+    "bullets": ["what it is", "how you found it", "how often you use it", "and explain why it is useful to you"],
+    "rounding_off": ["Have you recommended it to anyone else?"],
+    "part3": [
+      "How has technology changed the way people communicate?",
+      "Do people spend too much time on their phones?",
+      "What are the dangers of children using the internet?",
+      "Will technology create more jobs than it destroys?"
+    ]
+  },
+  {
+    "id": "describe-a-friend",
+    "topic": "People",
+    "part1": [
+      "Do you have many close friends?",
+      "How do you usually spend time with your friends?",
+      "Is it easy to make new friends where you live?",
+      "Do you prefer to talk to friends in person or online?"
+    ],
+    "prompt": "Describe a friend you have known for a long time.",
+    "bullets": ["who this person is", "how you met", "what you do together", "and explain why your friendship has lasted"],
+    "rounding_off": ["How often do you see this friend now?"],
+    "part3": [
+      "What qualities make someone a good friend?",
+      "Is it harder for adults to make friends than for children?",
+      "Can social media friendships be as strong as real-life ones?",
+      "Why do some friendships end?"
+    ]
+  },
+  {
+    "id": "describe-a-book",
+    "topic": "Reading",
+    "part1": [
+      "Do you enjoy reading? Why or why not?",
+      "What kind of books did you read as a child?",
+      "Do you prefer paper books or reading on a screen?",
+      "Where do you usually read?"
+    ],
+    "prompt": "Describe a book you have read that you found interesting.",
+    "bullets": ["what the book was", "when you read it", "what it was about", "and explain why you found it interesting"],
+    "rounding_off": ["Would you read it again?"],
+    "part3": [
+      "Why do fewer young people read books today?",
+      "Should parents choose the books their children read?",
+      "Are libraries still important in the digital age?",
+      "Can films teach us as much as books can?"
+    ]
+  },
+  {
+    "id": "describe-a-goal",
+    "topic": "Ambition",
+    "part1": [
+      "What do you hope to be doing in five years?",
+      "Do you usually make plans or prefer to be spontaneous?",
+      "What did you want to be when you were a child?",
+      "Do you write down your goals?"
+    ],
+    "prompt": "Describe an important goal you would like to achieve.",
+    "bullets": ["what the goal is", "when you set it", "what you are doing to achieve it", "and explain why it is important to you"],
+    "rounding_off": ["Who knows about this goal?"],
+    "part3": [
+      "Is it important for young people to have clear goals?",
+      "What stops people from achieving their goals?",
+      "Should success be measured by money?",
+      "Do parents put too much pressure on children to succeed?"
+    ]
+  },
+  {
+    "id": "describe-a-meal",
+    "topic": "Food",
+    "part1": [
+      "What is your favourite food?",
+      "Do you enjoy cooking? Why or why not?",
+      "Do you usually eat at home or outside?",
+      "What food is your city famous for?"
+    ],
+    "prompt": "Describe a special meal you have had.",
+    "bullets": ["where you had it", "who you were with", "what you ate", "and explain why it was special"],
+    "rounding_off": ["Do you often eat that kind of food?"],
+    "part3": [
+      "How have eating habits changed in your country?",
+      "Is fast food a problem for young people's health?",
+      "Should schools teach children how to cook?",
+      "Why do families eat together less than before?"
+    ]
+  },
+  {
+    "id": "describe-a-place-to-relax",
+    "topic": "Places",
+    "part1": [
+      "Where do you live at the moment?",
+      "What do you like about your neighbourhood?",
+      "Is there anything you would change about where you live?",
+      "Do you prefer quiet places or busy places?"
+    ],
+    "prompt": "Describe a place where you like to relax.",
+    "bullets": ["where it is", "how often you go there", "what you do there", "and explain why it helps you relax"],
+    "rounding_off": ["Do other people know about this place?"],
+    "part3": [
+      "Why do people find it hard to relax nowadays?",
+      "Should cities have more parks and green spaces?",
+      "Do people in cities have more stress than people in villages?",
+      "What can employers do to reduce stress at work?"
+    ]
+  },
+  {
+    "id": "describe-a-skill",
+    "topic": "Learning",
+    "part1": [
+      "Are you good at learning new things?",
+      "What skill would you like to learn next?",
+      "Did you learn any practical skills at school?",
+      "Do you prefer learning alone or in a group?"
+    ],
+    "prompt": "Describe a skill that took you a long time to learn.",
+    "bullets": ["what the skill is", "when you started learning it", "how you learned it", "and explain why it took a long time"],
+    "rounding_off": ["Are you still improving this skill?"],
+    "part3": [
+      "Which skills are most important for young people today?",
+      "Is it better to learn from a teacher or from the internet?",
+      "Are practical skills valued less than academic ones?",
+      "Should older people keep learning new skills?"
+    ]
+  },
+  {
+    "id": "describe-a-decision",
+    "topic": "Choices",
+    "part1": [
+      "Do you find it easy to make decisions?",
+      "Who do you ask for advice when you have to choose something?",
+      "Do you make decisions quickly or slowly?",
+      "What small decisions do you make every day?"
+    ],
+    "prompt": "Describe an important decision you made.",
+    "bullets": ["what the decision was", "when you made it", "how you made it", "and explain how you felt about it afterwards"],
+    "rounding_off": ["Would you make the same decision again?"],
+    "part3": [
+      "Should young people make their own career decisions?",
+      "Why do some people find it hard to make decisions?",
+      "Do people today have too many choices?",
+      "What decisions should governments make for citizens?"
+    ]
+  },
+  {
+    "id": "describe-a-family-member",
+    "topic": "Family",
+    "part1": [
+      "How many people are there in your family?",
+      "Do you live with your family?",
+      "What do you usually do together as a family?",
+      "Who are you closest to in your family?"
+    ],
+    "prompt": "Describe a family member you admire.",
+    "bullets": ["who this person is", "what they do", "what they are like", "and explain why you admire them"],
+    "rounding_off": ["Are you similar to this person in any way?"],
+    "part3": [
+      "How have families changed in your country?",
+      "Is it better to live in a large family or a small one?",
+      "Who should look after elderly parents?",
+      "Do grandparents play an important role in raising children?"
+    ]
+  },
+  {
+    "id": "describe-a-job",
+    "topic": "Work",
+    "part1": [
+      "What do you do for work, or what would you like to do?",
+      "What is a typical working day like for you?",
+      "Would you prefer to work for a big company or a small one?",
+      "Do you think you will do the same job for many years?"
+    ],
+    "prompt": "Describe a job you would like to do in the future.",
+    "bullets": ["what the job is", "what skills it needs", "how you could get this job", "and explain why you would like to do it"],
+    "rounding_off": ["Does anyone you know do this job?"],
+    "part3": [
+      "What makes a job satisfying?",
+      "Is salary the most important thing when choosing a job?",
+      "How will artificial intelligence change the jobs people do?",
+      "Should young people move abroad for better jobs?"
+    ]
+  },
+  {
+    "id": "describe-a-sport",
+    "topic": "Sport",
+    "part1": [
+      "Do you play any sports?",
+      "Which sport is most popular in your country?",
+      "Did you do sports at school?",
+      "Do you prefer watching sport or playing it?"
+    ],
+    "prompt": "Describe a sport or physical activity you enjoy.",
+    "bullets": ["what it is", "when you started doing it", "how often you do it", "and explain why you enjoy it"],
+    "rounding_off": ["Would you recommend it to others?"],
+    "part3": [
+      "Why is sport important for children?",
+      "Are professional athletes paid too much?",
+      "Should the government spend money on sports facilities?",
+      "How can people be encouraged to exercise more?"
+    ]
+  },
+  {
+    "id": "describe-a-gift",
+    "topic": "Gifts",
+    "part1": [
+      "Do you like giving gifts?",
+      "What was the last gift you bought for someone?",
+      "Is it hard to choose gifts for people?",
+      "Do you prefer to receive money or a gift?"
+    ],
+    "prompt": "Describe a gift you gave to someone that made them happy.",
+    "bullets": ["what the gift was", "who you gave it to", "why you chose it", "and explain why it made them happy"],
+    "rounding_off": ["Did you spend a lot on it?"],
+    "part3": [
+      "Why do people give gifts?",
+      "Has gift-giving become too expensive?",
+      "Are handmade gifts better than bought ones?",
+      "How do gift customs differ between cultures?"
+    ]
+  },
+  {
+    "id": "describe-a-building",
+    "topic": "Architecture",
+    "part1": [
+      "What kind of building do you live in?",
+      "Is there a famous building in your city?",
+      "Do you prefer old buildings or modern ones?",
+      "What would your dream home look like?"
+    ],
+    "prompt": "Describe a building that you find beautiful.",
+    "bullets": ["where it is", "what it looks like", "what it is used for", "and explain why you find it beautiful"],
+    "rounding_off": ["Have you been inside it?"],
+    "part3": [
+      "Should old buildings be protected or replaced?",
+      "How do modern buildings affect the character of a city?",
+      "Who should pay to look after historic buildings?",
+      "What makes a city a good place to live?"
+    ]
+  },
+  {
+    "id": "describe-a-problem-solved",
+    "topic": "Problem solving",
+    "part1": [
+      "Are you good at solving problems?",
+      "What do you do when you feel stuck?",
+      "Do you prefer to solve problems alone or with help?",
+      "What kind of problems did you have as a student?"
+    ],
+    "prompt": "Describe a problem you solved recently.",
+    "bullets": ["what the problem was", "when it happened", "how you solved it", "and explain how you felt after solving it"],
+    "rounding_off": ["Did anyone help you?"],
+    "part3": [
+      "Why are problem-solving skills important at work?",
+      "Should schools teach problem solving as a subject?",
+      "Do young people give up too easily?",
+      "What problems will cities face in the future?"
+    ]
+  },
+  {
+    "id": "describe-an-environment-action",
+    "topic": "Environment",
+    "part1": [
+      "Is the air clean where you live?",
+      "Do you recycle at home?",
+      "Do you spend much time outdoors?",
+      "Has the weather in your country changed in recent years?"
+    ],
+    "prompt": "Describe something you do to protect the environment.",
+    "bullets": ["what you do", "when you started doing it", "how easy or difficult it is", "and explain why you do it"],
+    "rounding_off": ["Do your family do the same?"],
+    "part3": [
+      "Who is more responsible for the environment, people or governments?",
+      "Should plastic bags be banned?",
+      "How can cities reduce air pollution?",
+      "Are people willing to pay more for green products?"
+    ]
+  },
+  {
+    "id": "describe-an-advertisement",
+    "topic": "Media",
+    "part1": [
+      "Do you watch television?",
+      "Where do you usually see advertisements?",
+      "Do you ever click on adverts online?",
+      "Do you read the news every day?"
+    ],
+    "prompt": "Describe an advertisement you remember well.",
+    "bullets": ["what it was for", "where you saw it", "what it showed", "and explain why you remember it"],
+    "rounding_off": ["Did you buy the product?"],
+    "part3": [
+      "Do advertisements influence what people buy?",
+      "Should advertising aimed at children be controlled?",
+      "Is it acceptable for advertisements to exaggerate?",
+      "How has advertising changed with social media?"
+    ]
+  },
+  {
+    "id": "describe-a-time-you-helped",
+    "topic": "Kindness",
+    "part1": [
+      "Do you like helping other people?",
+      "Who helps you most in your daily life?",
+      "Do people in your area help their neighbours?",
+      "Have you ever done volunteer work?"
+    ],
+    "prompt": "Describe a time when you helped someone.",
+    "bullets": ["who you helped", "what the situation was", "how you helped", "and explain how you felt afterwards"],
+    "rounding_off": ["Did they thank you?"],
+    "part3": [
+      "Why do some people volunteer their time?",
+      "Should helping the community be part of school education?",
+      "Are people less helpful in big cities?",
+      "Who should help the poor, charities or governments?"
+    ]
+  },
+  {
+    "id": "describe-a-childhood-memory",
+    "topic": "Childhood",
+    "part1": [
+      "Where did you grow up?",
+      "What games did you play as a child?",
+      "Did you have a favourite toy?",
+      "Is childhood today different from when you were young?"
+    ],
+    "prompt": "Describe a happy memory from your childhood.",
+    "bullets": ["what happened", "when and where it happened", "who was with you", "and explain why it is a happy memory"],
+    "rounding_off": ["Do you often think about this memory?"],
+    "part3": [
+      "Do children today have a happier childhood than in the past?",
+      "Should children spend more time playing outside?",
+      "How much freedom should children have?",
+      "What do people remember most from their childhood?"
+    ]
+  },
+  {
+    "id": "describe-a-shop",
+    "topic": "Shopping",
+    "part1": [
+      "Do you enjoy shopping?",
+      "Do you prefer shopping online or in shops?",
+      "What did you last buy for yourself?",
+      "Are there many markets where you live?"
+    ],
+    "prompt": "Describe a shop or market you like to visit.",
+    "bullets": ["where it is", "what it sells", "how often you go there", "and explain why you like it"],
+    "rounding_off": ["Is it usually busy?"],
+    "part3": [
+      "Will online shopping replace traditional shops?",
+      "Why do people buy things they do not need?",
+      "Are small local shops important to a community?",
+      "How do shopping habits differ between generations?"
+    ]
+  },
+  {
+    "id": "describe-a-film",
+    "topic": "Entertainment",
+    "part1": [
+      "Do you like watching films?",
+      "What kind of films do you enjoy?",
+      "Do you prefer watching films at home or in the cinema?",
+      "Who do you usually watch films with?"
+    ],
+    "prompt": "Describe a film that made a strong impression on you.",
+    "bullets": ["what the film was", "when you watched it", "what it was about", "and explain why it impressed you"],
+    "rounding_off": ["Would you recommend it to a friend?"],
+    "part3": [
+      "Why are films from other countries popular?",
+      "Should films be rated by age?",
+      "Do films influence how young people behave?",
+      "Will streaming services replace cinemas?"
+    ]
+  },
+  {
+    "id": "describe-a-language-experience",
+    "topic": "Languages",
+    "part1": [
+      "What languages can you speak?",
+      "When did you start learning English?",
+      "What is the hardest part of learning English for you?",
+      "Would you like to learn another language?"
+    ],
+    "prompt": "Describe a time when you had to use English to communicate.",
+    "bullets": ["when and where it was", "who you spoke to", "what you talked about", "and explain how you felt about it"],
+    "rounding_off": ["Was it easier than you expected?"],
+    "part3": [
+      "Why do so many people want to learn English?",
+      "At what age should children start learning a foreign language?",
+      "Is it possible to learn a language without living abroad?",
+      "Will translation apps make learning languages unnecessary?"
+    ]
+  },
+  {
+    "id": "describe-a-weekend",
+    "topic": "Free time",
+    "part1": [
+      "What do you usually do at the weekend?",
+      "Do you have enough free time?",
+      "Do you prefer to stay at home or go out in your free time?",
+      "What hobby would you like to start?"
+    ],
+    "prompt": "Describe a weekend you really enjoyed.",
+    "bullets": ["when it was", "where you were", "what you did", "and explain why you enjoyed it"],
+    "rounding_off": ["Do you have many weekends like that?"],
+    "part3": [
+      "Do people today have more free time than in the past?",
+      "Why do some people work at weekends?",
+      "Is it important to have hobbies?",
+      "How should companies help employees balance work and life?"
+    ]
+  },
+  {
+    "id": "describe-a-person-in-news",
+    "topic": "Public figures",
+    "part1": [
+      "How do you usually get the news?",
+      "Do you follow any famous people online?",
+      "Are celebrities popular in your country?",
+      "Would you like to be famous?"
+    ],
+    "prompt": "Describe a well-known person you would like to meet.",
+    "bullets": ["who this person is", "how you know about them", "what you would ask them", "and explain why you would like to meet them"],
+    "rounding_off": ["Have you ever seen this person in real life?"],
+    "part3": [
+      "Why do young people admire celebrities?",
+      "Should famous people be role models?",
+      "Do the media give celebrities too much attention?",
+      "Which jobs deserve more public recognition?"
+    ]
+  },
+  {
+    "id": "describe-a-change",
+    "topic": "Change",
+    "part1": [
+      "Do you like change in your daily routine?",
+      "What has changed in your life in the last year?",
+      "Has your city changed much recently?",
+      "Is it easy for you to adapt to new situations?"
+    ],
+    "prompt": "Describe a change that improved your life.",
+    "bullets": ["what the change was", "when it happened", "how it happened", "and explain how it improved your life"],
+    "rounding_off": ["Would you make any more changes like this?"],
+    "part3": [
+      "Why are some people afraid of change?",
+      "Are older people less willing to accept change?",
+      "What changes will we see in workplaces in the next ten years?",
+      "Is change in society always positive?"
+    ]
+  },
+  {
+    "id": "describe-a-time-you-were-late",
+    "topic": "Time",
+    "part1": [
+      "Are you usually on time?",
+      "How do you manage your time each day?",
+      "Do you wear a watch?",
+      "What time of day do you work best?"
+    ],
+    "prompt": "Describe a time when you were late for something important.",
+    "bullets": ["what you were late for", "why you were late", "what happened as a result", "and explain how you felt about it"],
+    "rounding_off": ["Did it teach you anything?"],
+    "part3": [
+      "Is being on time equally important in all cultures?",
+      "Why do people find it hard to manage their time?",
+      "Do mobile phones help or harm our time management?",
+      "Should students be punished for being late?"
+    ]
+  },
+  {
+    "id": "describe-a-team",
+    "topic": "Teamwork",
+    "part1": [
+      "Do you enjoy working in a team?",
+      "Did you do group projects at school?",
+      "Are you usually a leader or a follower?",
+      "What makes a good team member?"
+    ],
+    "prompt": "Describe a time when you worked in a team to achieve something.",
+    "bullets": ["what the task was", "who was in the team", "what your role was", "and explain how the team achieved its goal"],
+    "rounding_off": ["Would you work with the same people again?"],
+    "part3": [
+      "Is teamwork more important now than in the past?",
+      "What makes a good leader?",
+      "How can conflicts in a team be solved?",
+      "Should children be taught to compete or to cooperate?"
+    ]
+  },
+  {
+    "id": "describe-a-piece-of-news",
+    "topic": "News",
+    "part1": [
+      "Do you read newspapers?",
+      "What kind of news interests you most?",
+      "Do you share news stories with your friends?",
+      "Do you trust the news you read online?"
+    ],
+    "prompt": "Describe a piece of good news you heard recently.",
+    "bullets": ["what the news was", "how you heard it", "who it affected", "and explain why you think it was good news"],
+    "rounding_off": ["Did you tell anyone about it?"],
+    "part3": [
+      "Why does the media report more bad news than good news?",
+      "How can people tell if news is fake?",
+      "Should young people pay more attention to world news?",
+      "Has social media made news more or less reliable?"
+    ]
+  },
+  {
+    "id": "describe-a-rule",
+    "topic": "Rules",
+    "part1": [
+      "Did your school have many rules?",
+      "Are there rules in your home?",
+      "Do you always follow rules?",
+      "Which rule do you find most useful in daily life?"
+    ],
+    "prompt": "Describe a rule at school or work that you agree with.",
+    "bullets": ["what the rule is", "where it applies", "how people follow it", "and explain why you agree with it"],
+    "rounding_off": ["Have you ever broken this rule?"],
+    "part3": [
+      "Why do societies need rules?",
+      "Should children be allowed to make some of their own rules?",
+      "Are punishments the best way to make people follow laws?",
+      "Which laws would you change in your country?"
+    ]
+  },
+  {
+    "id": "describe-a-healthy-habit",
+    "topic": "Health",
+    "part1": [
+      "Do you think you have a healthy lifestyle?",
+      "How many hours do you usually sleep?",
+      "Do you walk much during the day?",
+      "What do you do when you feel tired?"
+    ],
+    "prompt": "Describe a healthy habit you have.",
+    "bullets": ["what the habit is", "when you started it", "how you keep it going", "and explain how it helps you"],
+    "rounding_off": ["Is it hard to keep this habit?"],
+    "part3": [
+      "Why do people find it hard to stay healthy?",
+      "Should unhealthy food be taxed?",
+      "Who is responsible for people's health, individuals or governments?",
+      "How has health care changed in your country?"
+    ]
+  },
+  {
+    "id": "describe-a-website-for-learning",
+    "topic": "Online learning",
+    "part1": [
+      "Have you ever taken an online course?",
+      "Do you use videos to learn new things?",
+      "Is it easy to concentrate when you study online?",
+      "Do you prefer to study in the morning or at night?"
+    ],
+    "prompt": "Describe an online course or video that taught you something useful.",
+    "bullets": ["what it was", "how you found it", "what you learned", "and explain why it was useful"],
+    "rounding_off": ["Did you finish the whole course?"],
+    "part3": [
+      "What are the advantages of online learning?",
+      "Can online courses replace university degrees?",
+      "Do students need a teacher to stay motivated?",
+      "How will education look in twenty years?"
     ]
   }
 ]

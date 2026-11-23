@@ -565,6 +565,69 @@
         ]
       }
     },
+    "/api/v1/sessions/{id}/share-card.png": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Shareable PNG of a graded session's bands, with the Play Store link.",
+        "operationId": "get_share_card",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Session id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "1080x1350 PNG",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The session is not graded (yet)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/sessions/{id}/ws": {
       "get": {
         "tags": [
@@ -779,6 +842,36 @@
           }
         }
       },
+      "CueCardView": {
+        "type": "object",
+        "description": "What the app shows for Part 2. Part 1 and Part 3 questions stay on the\nserver so the learner cannot read them in advance.",
+        "required": [
+          "id",
+          "topic",
+          "prompt",
+          "bullets"
+        ],
+        "properties": {
+          "bullets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "\"You should say:\" points; the last one usually starts with \"and explain\"."
+          },
+          "id": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The Part 2 task, e.g. \"Describe a memorable journey you have made.\""
+          },
+          "topic": {
+            "type": "string",
+            "description": "Theme of the whole test, e.g. \"Travel\"."
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "description": "Wire format of every error: `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`.",
@@ -869,6 +962,17 @@
             "items": {
               "$ref": "#/components/schemas/Correction"
             }
+          },
+          "cue_card": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CueCardView",
+                "description": "Mock only: the Part 2 task the learner answered."
+              }
+            ]
           },
           "demo": {
             "type": "boolean",
@@ -1246,6 +1350,13 @@
           "mode"
         ],
         "properties": {
+          "cue_card_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mock only: run this cue card. Omit it to get a random card the user\nhas not had recently."
+          },
           "mode": {
             "type": "string",
             "description": "talk | mock | interview"
@@ -1283,6 +1394,17 @@
           "connect_url": {
             "type": "string",
             "description": "Where the app connects. Gemini: WebSocket, append `?access_token=<token>`.\nOpenAI: POST the WebRTC SDP offer here with `Authorization: Bearer <token>`.\nRelay: a path on this API; open a WebSocket to it with `?ticket=<token>`."
+          },
+          "cue_card": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CueCardView",
+                "description": "Mock only: the Part 2 task to show while the learner prepares and speaks."
+              }
+            ]
           },
           "hard_cutoff": {
             "type": "boolean",

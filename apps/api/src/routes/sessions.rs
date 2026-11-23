@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::{AuthUser, refresh},
+    content::CueCardView,
     domain::{
         sessions::{self, EndedBy, Mode, NewSession},
         users,
@@ -50,6 +51,9 @@ pub struct StartSessionRequest {
     /// provider. Gives a server-enforced time limit for every provider.
     #[serde(default)]
     pub relay: bool,
+    /// Mock only: run this cue card. Omit it to get a random card the user
+    /// has not had recently.
+    pub cue_card_id: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -74,7 +78,13 @@ pub struct StartSessionResponse {
     /// True if the provider itself cuts the session off at the limit.
     pub hard_cutoff: bool,
     pub prompt_version: String,
+    /// Mock only: the Part 2 task to show while the learner prepares and speaks.
+    pub cue_card: Option<CueCardView>,
 }
+
+/// How many recent mocks to look back over when avoiding repeated cue cards.
+/// Larger than the bank, so every card is used once before any repeats.
+const RECENT_CUE_CARDS: i64 = 40;
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -136,6 +146,7 @@ pub async fn start_session(
     let level = profile.level.as_deref().unwrap_or("b1");
     let goal = profile.goal.as_deref().unwrap_or("daily");
 
+    let mut cue_card = None;
     let (prompt, system_prompt) = match mode {
         Mode::Talk => {
             let p = &state.prompts.tutor;
@@ -146,9 +157,31 @@ pub async fn start_session(
             )
         }
         Mode::Mock => {
+            let card = match req.cue_card_id.as_deref() {
+                Some(id) => state
+                    .content
+                    .cue_card(id)
+                    .ok_or_else(|| AppError::BadRequest(format!("unknown cue card {id:?}")))?,
+                None => {
+                    let recent =
+                        sessions::recent_cue_cards(&state.db, user.id, RECENT_CUE_CARDS).await?;
+                    state.content.pick_cue_card(&recent).ok_or_else(|| {
+                        AppError::Internal(anyhow::anyhow!("the cue card bank is empty"))
+                    })?
+                }
+            };
+            let v = card.prompt_vars();
             let p = &state.prompts.examiner;
-            let t = topic.as_deref().unwrap_or("a common everyday topic");
-            (p, p.render(&[("level", level), ("topic", t)]))
+            let rendered = p.render(&[
+                ("level", level),
+                ("topic", &card.topic),
+                ("part1", &v.part1),
+                ("cue_card", &v.cue_card),
+                ("rounding_off", &v.rounding_off),
+                ("part3", &v.part3),
+            ]);
+            cue_card = Some(card);
+            (p, rendered)
         }
         Mode::Interview => {
             let key = topic
@@ -166,11 +199,16 @@ pub async fn start_session(
         NewSession {
             user_id: user.id,
             mode,
-            topic: topic.as_deref(),
+            // A mock's topic is its cue card's theme; free text is ignored.
+            topic: match cue_card {
+                Some(card) => Some(card.topic.as_str()),
+                None => topic.as_deref(),
+            },
             provider: primary.name(),
             model: primary.model(),
             prompt_version: &prompt.version,
             relay: req.relay,
+            cue_card_id: cue_card.map(|c| c.id.as_str()),
         },
         state.config.voice.usd_per_min,
     )
@@ -207,6 +245,7 @@ pub async fn start_session(
                 session_ends_at: now + chrono::Duration::seconds(i64::from(reserved.max_secs)),
                 hard_cutoff: true,
                 prompt_version: prompt.version.clone(),
+                cue_card: cue_card.map(|c| c.view()),
             }),
         ));
     }
@@ -245,6 +284,7 @@ pub async fn start_session(
             session_ends_at: Utc::now() + chrono::Duration::seconds(i64::from(reserved.max_secs)),
             hard_cutoff: token.hard_cutoff,
             prompt_version: prompt.version.clone(),
+            cue_card: cue_card.map(|c| c.view()),
         }),
     ))
 }

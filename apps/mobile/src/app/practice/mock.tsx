@@ -6,7 +6,7 @@ import { useTheme } from '@/theme';
 
 const PARTS: { icon: IconName; title: string; time: string; body: string }[] = [
   { icon: 'person', title: 'Part 1 · Introduction', time: '4–5 min', body: 'Short questions about you, your home, work or studies.' },
-  { icon: 'timer', title: 'Part 2 · Long turn', time: '3–4 min', body: 'A cue card, one minute to prepare, then speak for up to two minutes.' },
+  { icon: 'timer', title: 'Part 2 · Long turn', time: '3–4 min', body: 'A cue card on your screen: one minute to prepare, then speak for up to two minutes.' },
   { icon: 'chatbubbles', title: 'Part 3 · Discussion', time: '4–5 min', body: 'Deeper questions linked to your Part 2 topic.' },
 ];
 
@@ -60,7 +60,10 @@ export default function MockSetup() {
         ))}
       </Card>
 
-      <Notice tone="info">Find a quiet place. The examiner does not correct you during the test; feedback comes after.</Notice>
+      <Notice tone="info">
+        Find a quiet place. Each test uses a new topic from 30+ cue cards. The examiner does not correct you during the test;
+        your band and top 3 fixes come after.
+      </Notice>
 
       <StartPanel mode="mock" limitMins={15} />
     </Screen>

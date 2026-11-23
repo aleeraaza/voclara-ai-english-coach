@@ -53,6 +53,7 @@ pub fn test_config(database_url: &str) -> Config {
         voice: VoiceConfig::fake(),
         grader: GraderConfig::fake(),
         cors_origins: vec!["http://localhost:8081".into()],
+        play_store_url: "https://play.google.com/store/apps/details?id=app.voclara".into(),
     }
 }
 

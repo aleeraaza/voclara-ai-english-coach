@@ -110,7 +110,7 @@ async fn mock_is_capped_by_balance_not_just_mode_limit() {
         body["max_secs"], 600,
         "mock limit is 900 but only 600 s are left"
     );
-    assert_eq!(body["prompt_version"], "examiner-v1");
+    assert_eq!(body["prompt_version"], "examiner-v2");
 }
 
 #[tokio::test]

@@ -5,6 +5,10 @@ agents. Tokens live in [`src/theme/tokens.ts`](src/theme/tokens.ts);
 components in [`src/components/`](src/components/). If something you need is
 missing, **add it to the tokens or the kit first**, then use it.
 
+For whole-app screen design (e.g. in Google Stitch), the self-contained brief
+with every screen, feature and token is [`docs/stitch/design.md`](../../docs/stitch/design.md).
+Keep it in step when you add a screen or change a token.
+
 ## 1. Principles
 
 1. **One thing per screen.** Each screen has one job and at most one primary
@@ -62,6 +66,7 @@ The live-session screen always uses the dark `gradients.canvas` with
 | `ProgressBar` | `value` 0–1, `tone` | Bands, minutes, criteria. | animated fill |
 | `BandBadge` | `band`, `size` | The estimated band, always labelled "IELTS-style estimate". | — |
 | `VoiceOrb` | `state` (idle, listening, speaking), `level`, `size` | The tutor's presence: splash, onboarding, live session. | breathes when idle; pulses with level |
+| `MockStage` | `card`, `progress` (from `lib/mock.ts`) | Live mock only (dark canvas): Part 1·2·3 stepper, Part 2 cue card with prepare/speak timer pill. | current part, done parts, prepare (marigold), speak, time up |
 | `SoundWave` | `bars`, `active`, `tone` | Splash and "listening" indicators. | animated |
 | `EmptyState` | `icon`, `title`, `body`, `action` | Lists with nothing yet. | — |
 | `Field` | `label`, `hint`, `error` | Text input. | focused (primary border), error (danger border + message) |

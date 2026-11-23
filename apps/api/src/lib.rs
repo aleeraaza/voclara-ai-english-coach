@@ -3,6 +3,7 @@
 
 pub mod auth;
 pub mod config;
+pub mod content;
 pub mod domain;
 pub mod error;
 pub mod openapi;
@@ -10,6 +11,7 @@ pub mod prompts;
 pub mod providers;
 pub mod relay;
 pub mod routes;
+pub mod share_card;
 pub mod state;
 pub mod telemetry;
 pub mod worker;

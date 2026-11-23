@@ -178,6 +178,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/share-card.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shareable PNG of a graded session's bands, with the Play Store link. */
+        get: operations["get_share_card"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/ws": {
         parameters: {
             query?: never;
@@ -281,6 +298,19 @@ export interface components {
             /** @description The same reason in the learner's explanation language. */
             why_l1: string;
         };
+        /**
+         * @description What the app shows for Part 2. Part 1 and Part 3 questions stay on the
+         *     server so the learner cannot read them in advance.
+         */
+        CueCardView: {
+            /** @description "You should say:" points; the last one usually starts with "and explain". */
+            bullets: string[];
+            id: string;
+            /** @description The Part 2 task, e.g. "Describe a memorable journey you have made." */
+            prompt: string;
+            /** @description Theme of the whole test, e.g. "Travel". */
+            topic: string;
+        };
         /** @description Wire format of every error: `{"error": {"code": "...", "message": "..."}}`. */
         ErrorBody: {
             error: components["schemas"]["ErrorDetail"];
@@ -300,6 +330,7 @@ export interface components {
         FeedbackResponse: {
             bands?: null | components["schemas"]["Bands"];
             corrections: components["schemas"]["Correction"][];
+            cue_card?: null | components["schemas"]["CueCardView"];
             /** @description True when the scores come from the demo grader, not a real model. */
             demo: boolean;
             evidence?: null | components["schemas"]["Evidence"];
@@ -433,6 +464,11 @@ export interface components {
             refresh_token: string;
         };
         StartSessionRequest: {
+            /**
+             * @description Mock only: run this cue card. Omit it to get a random card the user
+             *     has not had recently.
+             */
+            cue_card_id?: string | null;
             /** @description talk | mock | interview */
             mode: string;
             /**
@@ -453,6 +489,7 @@ export interface components {
              *     Relay: a path on this API; open a WebSocket to it with `?ticket=<token>`.
              */
             connect_url: string;
+            cue_card?: null | components["schemas"]["CueCardView"];
             /** @description True if the provider itself cuts the session off at the limit. */
             hard_cutoff: boolean;
             /**
@@ -961,6 +998,47 @@ export interface operations {
             };
             /** @description No such session for this user */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_share_card: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 1080x1350 PNG */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": number[];
+                };
+            };
+            /** @description No such session for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The session is not graded (yet) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -23,6 +23,7 @@ use crate::{error, routes};
         routes::sessions::complete_session,
         routes::sessions::relay_socket,
         routes::feedback::get_feedback,
+        routes::feedback::get_share_card,
         routes::feedback::get_progress,
     ),
     components(schemas(
@@ -43,6 +44,7 @@ use crate::{error, routes};
         routes::sessions::TranscriptTurn,
         routes::sessions::TurnRole,
         routes::sessions::CompleteSessionResponse,
+        crate::content::CueCardView,
         crate::providers::voice::Transport,
         routes::feedback::FeedbackResponse,
         routes::feedback::Bands,

@@ -8,6 +8,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { api, type Feedback } from '@/lib/api/client';
 import { languageLabel } from '@/lib/labels';
+import { shareResult } from '@/lib/shareCard';
 import { pollUntil } from '@/lib/poll';
 import { useTheme } from '@/theme';
 
@@ -140,6 +141,10 @@ export function FeedbackView({
 
   const l1 = fb.l1 && fb.l1 !== 'en' ? languageLabel(fb.l1) : null;
   const bands = fb.bands;
+  const isMock = fb.mode === 'mock';
+  // A mock result keeps it focused: the three fixes that matter most.
+  const corrections = isMock ? fb.corrections.slice(0, 3) : fb.corrections;
+  const share = () => void shareResult(fb.session_id, bands.overall, isMock).catch(() => undefined);
 
   return (
     <>
@@ -157,9 +162,19 @@ export function FeedbackView({
           {headline(bands.overall)}
         </Txt>
         <Txt variant="small" tone="muted" align="center">
-          Estimated overall band · IELTS-style practice
+          {isMock ? 'Estimated overall band · IELTS-style mock' : 'Estimated overall band · IELTS-style practice'}
         </Txt>
+        {!fb.demo && <Button title="Share result" variant="secondary" icon="share-social" onPress={share} />}
       </Card>
+
+      {fb.cue_card ? (
+        <Card tone="soft" style={{ gap: t.space.xs }}>
+          <Txt variant="label" tone="primary">
+            {`Your Part 2 task · ${fb.cue_card.topic}`}
+          </Txt>
+          <Txt variant="bodyStrong">{fb.cue_card.prompt}</Txt>
+        </Card>
+      ) : null}
 
       {/* Criteria */}
       <SectionTitle>Your four criteria</SectionTitle>
@@ -198,10 +213,14 @@ export function FeedbackView({
       </Card>
 
       {/* Corrections */}
-      {fb.corrections.length > 0 && (
+      {corrections.length > 0 && (
         <>
-          <SectionTitle>{`${fb.corrections.length} ${fb.corrections.length === 1 ? 'fix' : 'fixes'} to try`}</SectionTitle>
-          {fb.corrections.map((c, i) => (
+          <SectionTitle>
+            {isMock
+              ? `Top ${corrections.length} ${corrections.length === 1 ? 'fix' : 'fixes'}`
+              : `${corrections.length} ${corrections.length === 1 ? 'fix' : 'fixes'} to try`}
+          </SectionTitle>
+          {corrections.map((c, i) => (
             <Card key={i} style={{ gap: t.space.sm }}>
               <View style={{ flexDirection: 'row', gap: t.space.sm }}>
                 <Icon name="close-circle" size={20} color={t.colors.danger} />

@@ -13,6 +13,7 @@ export type Schemas = components['schemas'];
 export type Me = Schemas['MeResponse'];
 export type StartedSession = Schemas['StartSessionResponse'];
 export type Feedback = Schemas['FeedbackResponse'];
+export type CueCard = Schemas['CueCardView'];
 export type Progress = Schemas['ProgressResponse'];
 
 /**

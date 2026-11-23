@@ -118,6 +118,8 @@ pub struct NewSession<'a> {
     pub prompt_version: &'a str,
     /// True: the app connects to our relay WebSocket instead of the provider.
     pub relay: bool,
+    /// Mock only: the cue card this test uses.
+    pub cue_card_id: Option<&'a str>,
 }
 
 /// How long a relay ticket stays valid after the session is reserved.
@@ -164,8 +166,8 @@ pub async fn reserve(db: &PgPool, new: NewSession<'_>, usd_per_min: f64) -> AppR
     let max_secs = i32::try_from(max_secs).map_err(|e| AppError::Internal(e.into()))?;
 
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO sessions (user_id, mode, topic, provider, model, prompt_version, max_secs, transport)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+        "INSERT INTO sessions (user_id, mode, topic, provider, model, prompt_version, max_secs, transport, cue_card_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
     )
     .bind(new.user_id)
     .bind(new.mode.as_str())
@@ -175,6 +177,7 @@ pub async fn reserve(db: &PgPool, new: NewSession<'_>, usd_per_min: f64) -> AppR
     .bind(new.prompt_version)
     .bind(max_secs)
     .bind(if new.relay { "relay" } else { "direct" })
+    .bind(new.cue_card_id)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -264,11 +267,51 @@ pub async fn mark_failed(db: &PgPool, id: Uuid) -> AppResult<()> {
 pub struct Completed {
     pub seconds_charged: i32,
     pub balance_secs: i64,
+    /// A mock that used one of the user's prepaid mock credits.
+    pub mock_credit_used: bool,
+}
+
+/// A mock shorter than this was abandoned, not taken: it costs no mock credit.
+pub const MOCK_CREDIT_MIN_SECS: i32 = 120;
+
+/// Recent cue cards for this user, newest first, so a new mock can avoid them.
+pub async fn recent_cue_cards(db: &PgPool, user_id: Uuid, limit: i64) -> AppResult<Vec<String>> {
+    Ok(sqlx::query_scalar(
+        "SELECT cue_card_id FROM sessions
+         WHERE user_id = $1 AND mode = 'mock' AND cue_card_id IS NOT NULL
+         ORDER BY started_at DESC LIMIT $2",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(db)
+    .await?)
+}
+
+/// Take one mock credit from the user's active entitlement that expires
+/// first, if any has credits left. Plans without mocks leave mocks on minutes.
+async fn use_mock_credit(conn: &mut PgConnection, user_id: Uuid) -> AppResult<bool> {
+    let used = sqlx::query(
+        "UPDATE entitlements SET mocks_left = mocks_left - 1, updated_at = now()
+         WHERE id = (
+             SELECT id FROM entitlements
+             WHERE user_id = $1 AND status = 'active' AND mocks_left > 0
+               AND starts_at <= now() AND (ends_at IS NULL OR ends_at > now())
+             ORDER BY ends_at NULLS LAST, created_at
+             LIMIT 1
+             FOR UPDATE
+         )",
+    )
+    .bind(user_id)
+    .execute(conn)
+    .await?
+    .rows_affected();
+    Ok(used == 1)
 }
 
 #[derive(sqlx::FromRow)]
 struct ActiveRow {
     status: String,
+    mode: String,
     transport: String,
     max_secs: i32,
     provider: String,
@@ -298,7 +341,7 @@ pub async fn complete(
     // Same lock order as `reserve` and `debit_seconds`: user first, then session.
     minutes::lock_user(&mut tx, user_id).await?;
     let row: ActiveRow = sqlx::query_as(
-        "SELECT status, transport, max_secs, provider,
+        "SELECT status, mode, transport, max_secs, provider,
                 EXTRACT(EPOCH FROM now() - started_at)::float8 AS elapsed_secs
          FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE",
     )
@@ -361,6 +404,10 @@ pub async fn complete(
     )
     .await?;
 
+    let mock_credit_used = row.mode == Mode::Mock.as_str()
+        && charged >= MOCK_CREDIT_MIN_SECS
+        && use_mock_credit(&mut tx, user_id).await?;
+
     // Queue grading in the same transaction: a completed session always has
     // exactly one grading job (a unique index de-duplicates retries).
     jobs::enqueue(
@@ -378,6 +425,7 @@ pub async fn complete(
     Ok(Completed {
         seconds_charged: charged,
         balance_secs,
+        mock_credit_used,
     })
 }
 

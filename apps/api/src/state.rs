@@ -5,9 +5,11 @@ use sqlx::PgPool;
 use crate::{
     auth::JwtKeys,
     config::Config,
+    content::Content,
     prompts::Prompts,
     providers::{google::GoogleVerifier, grader::Grader, otp::OtpSender, voice::VoiceProviders},
     relay::RelayLimits,
+    share_card::ShareCards,
 };
 
 /// External services the app talks to. Real ones in `main`, fakes in tests.
@@ -26,10 +28,14 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub jwt: Arc<JwtKeys>,
     pub prompts: Arc<Prompts>,
+    /// Cue cards and other practice content.
+    pub content: Arc<Content>,
     pub otp: Arc<dyn OtpSender>,
     pub google: Arc<dyn GoogleVerifier>,
     pub voice: Arc<VoiceProviders>,
     pub grader: Arc<dyn Grader>,
+    /// Share card renderer (fonts parsed once).
+    pub share_cards: Arc<ShareCards>,
     /// Relay timeouts; tests shorten them.
     pub relay_limits: Arc<RelayLimits>,
 }
@@ -45,6 +51,8 @@ impl AppState {
             config: Arc::new(config),
             jwt,
             prompts: Arc::new(Prompts::load()?),
+            content: Arc::new(Content::load()?),
+            share_cards: Arc::new(ShareCards::new()?),
             otp: providers.otp,
             google: providers.google,
             voice: providers.voice,

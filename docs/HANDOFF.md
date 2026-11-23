@@ -24,7 +24,7 @@ and Cursor loads them through `.cursor/rules/voclara.mdc`.
 | Prompt 6a | Grading from the transcript: jobs worker, grader LLM, feedback + progress, app screens | ✅ Done |
 | UI redesign | "Indus & Marigold" design system (`apps/mobile/DESIGN.md`, `src/theme`), tabs, onboarding, animated splash, practice setup screens; API CORS for the web preview | ✅ Done |
 | Prompt 6b | Pronunciation: clip upload (R2) + Azure Pronunciation Assessment | ⬜ Next |
-| Prompt 7 | IELTS mock flow (Parts 1-3, result page, share card) | ⬜ Not started (examiner prompt exists) |
+| Prompt 7 | IELTS-style mock flow: 33 cue cards, scripted examiner (v2), Part 2 cue card + prep/speak timers in the app, mock result (top 3 fixes, cue card, share), share card PNG, mock credits | ✅ Done (image share uses `expo-sharing`, added 24 Nov: needs the APK built after that) |
 | Prompt 8 | Billing (Play Billing, Safepay, Paddle/Lemon Squeezy) | ⬜ Not started (tables exist) |
 | Week 7 | Streaks, push, placement test | ⬜ Not started (tables exist) |
 | Week 9 | Store listing, privacy policy, launch | ⬜ Not started |
@@ -318,6 +318,28 @@ Pronunciation Assessment docs for unscripted (no reference text) assessment.
 > its topic. Result page: overall band, four criterion bands with evidence, top
 > 3 fixes, and a server-generated share card image with the Play Store link.
 > Mocks consume entitlements.mocks_left when the plan includes them."
+
+**Done (24 Nov 2026).** How it works:
+- `packages/content/ielts/cue-cards.json`: 33 cards, each with Part 1
+  questions, the Part 2 task, a rounding-off question and Part 3 questions.
+  `src/content.rs` embeds and validates them at startup (30+ cards, unique ids).
+- `POST /sessions {mode:"mock", cue_card_id?}` picks a card the user has not had
+  in their last 40 mocks (or the one asked for), renders `examiner/v2.md` with
+  the whole script and returns `cue_card` (Part 2 only) for the app.
+  `sessions.cue_card_id` stores it.
+- The examiner says fixed signal sentences ("Now, Part 2.", "You have one
+  minute to prepare.", "Now, Part 3.", "That is the end of the speaking test.");
+  the app's `lib/mock.ts` reads them from captions to drive `MockStage`
+  (part stepper, cue card, 1:00 prepare + 2:00 speak timers, "Get my band").
+- A mock of at least 2 minutes uses one `entitlements.mocks_left` credit if the
+  user has one (no plan sells them yet); otherwise mocks run on minutes.
+- `GET /sessions/{id}/feedback` returns `cue_card`; the result shows it, the
+  top 3 fixes and a text Share (band + Play Store link).
+- `GET /sessions/{id}/share-card.png`: 1080×1350 PNG rendered with resvg and
+  the embedded Plus Jakarta Sans (OFL, `apps/api/assets/fonts`). Store link from
+  `PLAY_STORE_URL`. The app downloads it to the cache (`expo-file-system`) and
+  opens the share sheet (`expo-sharing`, native: in the APK from 24 Nov on); it
+  falls back to a text share (band + store link) if that fails.
 
 ### 6.4 Relay mode in the app (optional)
 The API side is done (section 4). To use it from the app, for example as the

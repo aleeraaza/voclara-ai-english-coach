@@ -7,7 +7,8 @@
 use anyhow::{Context, Result};
 
 const TUTOR_V1: &str = include_str!("../../../packages/prompts/tutor/v1.md");
-const EXAMINER_V1: &str = include_str!("../../../packages/prompts/examiner/v1.md");
+// examiner-v2: scripted mock with signal sentences the app listens for.
+const EXAMINER_V2: &str = include_str!("../../../packages/prompts/examiner/v2.md");
 const INTERVIEWER_V1: &str = include_str!("../../../packages/prompts/interviewer/v1.md");
 const GRADER_V1: &str = include_str!("../../../packages/prompts/grader/v1.md");
 
@@ -60,7 +61,7 @@ impl Prompts {
     pub fn load() -> Result<Self> {
         Ok(Self {
             tutor: Prompt::parse(TUTOR_V1).context("tutor prompt")?,
-            examiner: Prompt::parse(EXAMINER_V1).context("examiner prompt")?,
+            examiner: Prompt::parse(EXAMINER_V2).context("examiner prompt")?,
             interviewer: Prompt::parse(INTERVIEWER_V1).context("interviewer prompt")?,
             grader: Prompt::parse(GRADER_V1).context("grader prompt")?,
         })
@@ -75,7 +76,7 @@ mod tests {
     fn embedded_prompts_parse_with_versions() {
         let p = Prompts::load().unwrap();
         assert_eq!(p.tutor.version, "tutor-v1");
-        assert_eq!(p.examiner.version, "examiner-v1");
+        assert_eq!(p.examiner.version, "examiner-v2");
         assert_eq!(p.interviewer.version, "interviewer-v1");
         assert_eq!(p.grader.version, "grader-v1");
         let g = p.grader.render(&[("l1", "Urdu")]);
@@ -100,8 +101,24 @@ mod tests {
         assert!(interviewer.contains("nursing job"));
         assert!(!interviewer.contains('{'));
 
-        let examiner = p.examiner.render(&[("level", "b1"), ("topic", "work")]);
-        assert!(!examiner.contains('{'));
+        let examiner = p.examiner.render(&[
+            ("level", "b1"),
+            ("topic", "work"),
+            ("part1", "- Q1"),
+            ("cue_card", "Describe a job."),
+            ("rounding_off", "Q?"),
+            ("part3", "- Q3"),
+        ]);
+        assert!(!examiner.contains('{'), "{examiner}");
+        // The app listens for these exact sentences to switch screens.
+        for signal in [
+            "Now, Part 2.",
+            "You have one minute to prepare.",
+            "Now, Part 3.",
+            "end of the speaking test",
+        ] {
+            assert!(examiner.contains(signal), "missing signal {signal}");
+        }
     }
 
     #[test]

@@ -277,6 +277,8 @@ pub struct Config {
     pub grader: GraderConfig,
     /// Browser origins allowed to call the API (the web app; Expo web in dev).
     pub cors_origins: Vec<String>,
+    /// Store link printed on share cards.
+    pub play_store_url: String,
 }
 
 impl Config {
@@ -308,6 +310,9 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .map(str::to_owned)
                 .collect(),
+            play_store_url: env::var("PLAY_STORE_URL").unwrap_or_else(|_| {
+                "https://play.google.com/store/apps/details?id=app.voclara".to_owned()
+            }),
         };
         config.validate()?;
         Ok(config)
@@ -327,6 +332,9 @@ impl Config {
         }
         self.voice.validate(self.app_env)?;
         self.grader.validate(self.app_env, &self.voice)?;
+        if !self.play_store_url.starts_with("https://") {
+            anyhow::bail!("PLAY_STORE_URL must be an https:// link");
+        }
         for origin in &self.cors_origins {
             if origin == "*" {
                 anyhow::bail!("CORS_ORIGINS must list origins explicitly, not '*'");
@@ -381,6 +389,7 @@ mod tests {
             voice: VoiceConfig::fake(),
             grader: GraderConfig::fake(),
             cors_origins: vec![],
+            play_store_url: "https://play.google.com/store/apps/details?id=app.voclara".into(),
         }
     }
 

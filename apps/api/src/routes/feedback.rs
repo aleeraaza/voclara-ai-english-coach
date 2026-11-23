@@ -3,6 +3,8 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
+    http::header,
+    response::IntoResponse,
     routing::get,
 };
 use chrono::{DateTime, Utc};
@@ -13,15 +15,18 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthUser,
+    content::CueCardView,
     domain::{grading::MIN_LEARNER_WORDS, metrics::Fillers},
     error::{AppError, AppResult, ErrorBody},
     providers::grader::{Correction, Evidence},
+    share_card::CardData,
     state::AppState,
 };
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/sessions/{id}/feedback", get(get_feedback))
+        .route("/sessions/{id}/share-card.png", get(get_share_card))
         .route("/progress", get(get_progress))
 }
 
@@ -56,6 +61,8 @@ pub struct FeedbackResponse {
     pub grader_version: Option<String>,
     /// Learner words needed for a session to be graded.
     pub min_words: usize,
+    /// Mock only: the Part 2 task the learner answered.
+    pub cue_card: Option<CueCardView>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -74,6 +81,7 @@ struct FeedbackRow {
     next_focus: Option<String>,
     grader_version: Option<String>,
     l1: Option<String>,
+    cue_card_id: Option<String>,
 }
 
 /// Feedback for one session. Poll while `status` is `pending`.
@@ -96,7 +104,7 @@ pub async fn get_feedback(
                 sc.fluency::float8 AS fluency, sc.lexical::float8 AS lexical,
                 sc.grammar::float8 AS grammar, sc.pronunciation::float8 AS pronunciation,
                 sc.overall::float8 AS overall, sc.evidence, sc.corrections, sc.fillers,
-                sc.wpm, sc.next_focus, sc.grader_version, sc.l1
+                sc.wpm, sc.next_focus, sc.grader_version, sc.l1, s.cue_card_id
          FROM sessions s LEFT JOIN scores sc ON sc.session_id = s.id
          WHERE s.id = $1 AND s.user_id = $2",
     )
@@ -135,7 +143,104 @@ pub async fn get_feedback(
         next_focus: row.next_focus.filter(|_| ready),
         grader_version: row.grader_version,
         min_words: MIN_LEARNER_WORDS,
+        // An id no longer in the bank (card retired) simply shows no card.
+        cue_card: row
+            .cue_card_id
+            .as_deref()
+            .and_then(|id| state.content.cue_card(id))
+            .map(|c| c.view()),
     }))
+}
+
+#[derive(sqlx::FromRow)]
+struct ShareRow {
+    mode: String,
+    grading_status: String,
+    cue_card_id: Option<String>,
+    fluency: Option<f64>,
+    lexical: Option<f64>,
+    grammar: Option<f64>,
+    pronunciation: Option<f64>,
+    overall: Option<f64>,
+    grader_version: Option<String>,
+}
+
+/// Shareable PNG of a graded session's bands, with the Play Store link.
+#[utoipa::path(
+    get, path = "/api/v1/sessions/{id}/share-card.png", tag = "feedback",
+    security(("bearer" = [])),
+    params(("id" = Uuid, Path, description = "Session id")),
+    responses(
+        (status = 200, description = "1080x1350 PNG", content_type = "image/png", body = Vec<u8>),
+        (status = 404, description = "No such session for this user", body = ErrorBody),
+        (status = 409, description = "The session is not graded (yet)", body = ErrorBody)
+    )
+)]
+pub async fn get_share_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> AppResult<impl IntoResponse> {
+    let row: ShareRow = sqlx::query_as(
+        "SELECT s.mode, s.grading_status, s.cue_card_id,
+                sc.fluency::float8 AS fluency, sc.lexical::float8 AS lexical,
+                sc.grammar::float8 AS grammar, sc.pronunciation::float8 AS pronunciation,
+                sc.overall::float8 AS overall, sc.grader_version
+         FROM sessions s LEFT JOIN scores sc ON sc.session_id = s.id
+         WHERE s.id = $1 AND s.user_id = $2",
+    )
+    .bind(id)
+    .bind(user.id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    let (Some(overall), Some(fluency), Some(lexical), Some(grammar)) =
+        (row.overall, row.fluency, row.lexical, row.grammar)
+    else {
+        return Err(AppError::Conflict("this session has no grade yet".into()));
+    };
+    if row.grading_status != "ready" {
+        return Err(AppError::Conflict("this session has no grade yet".into()));
+    }
+    // Owned copies: the blocking task must not borrow from this handler.
+    let topic: Option<String> = row
+        .cue_card_id
+        .as_deref()
+        .and_then(|cid| state.content.cue_card(cid))
+        .map(|c| c.topic.clone());
+    let store_url = state.config.play_store_url.clone();
+    let title = if row.mode == "mock" {
+        "IELTS-style mock"
+    } else {
+        "Speaking practice"
+    };
+    let demo = row.grader_version.as_deref() == Some("fake");
+    let pronunciation = row.pronunciation;
+    let cards = state.share_cards.clone();
+    // Rendering is CPU work (tens of ms): keep it off the async workers.
+    let png = tokio::task::spawn_blocking(move || {
+        cards.render_png(&CardData {
+            title,
+            overall,
+            fluency,
+            lexical,
+            grammar,
+            pronunciation,
+            topic: topic.as_deref(),
+            demo,
+            store_url: &store_url,
+        })
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.into()))??;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/png"),
+            (header::CACHE_CONTROL, "private, max-age=300"),
+        ],
+        png,
+    ))
 }
 
 /// A closure can't do this: its argument and return types are fixed at its
